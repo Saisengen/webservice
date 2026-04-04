@@ -8,6 +8,7 @@ app.MapGet("/service", (HttpContext context) =>
 {
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
+    return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", Environment.GetEnvironmentVariable("CREDS")), "text/html; charset=utf-8");
     var site = login("ru", creds[0], creds[1], creds[3]);
     if (parameters.Count == 0)
         return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", "").Replace("%inwikiproject%", "").Replace("%startyear%", (DateTime.Now.Year - 1).ToString())
