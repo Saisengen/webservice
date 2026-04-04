@@ -129,7 +129,8 @@ app.MapGet("/likes", (HttpContext context) =>
     if (parameters.Count == 0)
         return Results.Content(likes_template.Replace("%result%", "").Replace("%user%", "").Replace("%wiki%", "ru.wikipedia"), "text/html; charset=utf-8");
     var thanked = new Dictionary<string, int>(); var thankers = new Dictionary<string, int>(); var users = new HashSet<string>(); MySqlDataReader r; MySqlCommand command;
-    string user = parameters["user"]; string wiki = parameters["wiki"]; var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n'); var site = login("ru", creds[0], creds[1], creds[3]);
+    string user = parameters["user"]; string wiki = parameters["wiki"]; var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
+    return Results.Content(likes_template.Replace("%result%", creds[2].Replace("%project%", url2db(wiki))).Replace("%user%", user).Replace("%wiki%", wiki), "text/html; charset=utf-8");
     try
     {
         var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(wiki))); connect.Open();
