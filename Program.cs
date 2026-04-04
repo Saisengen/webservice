@@ -7,6 +7,7 @@ var app = builder.Build();
 app.MapGet("/service", (HttpContext context) =>
 {
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", context.Request.QueryString.ToString()), "text/html; charset=utf-8");
     var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
     return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", Environment.GetEnvironmentVariable("CREDS")), "text/html; charset=utf-8");
     var site = login("ru", creds[0], creds[1], creds[3]);
