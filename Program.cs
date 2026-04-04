@@ -127,7 +127,7 @@ app.MapGet("/likes", (HttpContext context) =>
         @"User: <input name=""user"" type=""text"" value=""%user%"" required>Wiki: <input type=""text"" name=""wiki"" value=""%wiki%"" required>");
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (parameters.Count == 0)
-        return Results.Content(likes_template.Replace("%result%", "").Replace("%user%", "").Replace("%wiki%", ""), "text/html; charset=utf-8");
+        return Results.Content(likes_template.Replace("%result%", "").Replace("%user%", "").Replace("%wiki%", "ru.wikipedia"), "text/html; charset=utf-8");
     var thanked = new Dictionary<string, int>(); var thankers = new Dictionary<string, int>(); var users = new HashSet<string>(); MySqlDataReader r; MySqlCommand command;
     string user = parameters["user"]; string wiki = parameters["wiki"]; var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n'); var site = login("ru", creds[0], creds[1], creds[3]);
     var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(wiki))); connect.Open();
@@ -153,10 +153,10 @@ app.MapGet("/likes", (HttpContext context) =>
     string response = "<br><br>\n<table><tr><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
     foreach (var t in thanked.OrderByDescending(t => t.Value))
         response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> " +
-        "<a href=\"https://mbh.toolforge.org/cgi-bin/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
+        "<a href=\"https://mbh.toolforge.org/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
     response += "</table></td><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
     foreach (var t in thankers.OrderByDescending(t => t.Value))
-        response += "<tr><td><a href=\"https://mbh.toolforge.org/cgi-bin/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki +
+        response += "<tr><td><a href=\"https://mbh.toolforge.org/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki +
         ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">🡲</a>" + user + " </td><td>" + t.Value + "</td></tr>\n";
     return Results.Content(likes_template.Replace("%result%", response + "</table></td></tr></table>").Replace("%user%", user).Replace("%wiki%", wiki), "text/html; charset=utf-8");
 });
