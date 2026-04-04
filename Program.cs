@@ -10,8 +10,10 @@ app.MapGet("/resized-pages", (HttpContext context) =>
 {
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
-    var site = login("ru", creds[0], creds[1], creds[3]);
-    string resized_template = html_template.Replace("%title%", "Статистика улучшенных статей за период").Replace("%form%", "resized-pages");
+    string resized_template = html_template.Replace("%title%", "Статистика улучшенных статей за период").Replace("%form%", "resized-pages").Replace("%body%",
+        @"<label for=""inwikiproject"">Категория:Статьи проекта </label><input type=""text"" name=""inwikiproject"" value=""%inwikiproject%"" required>
+<label for=""startyear"">С года </label><input type=""number"" name=""startyear"" value=""%startyear%"" required>
+<label for=""endyear"">По год </label><input type=""number"" name=""endyear"" value=""%endyear%"" required>");
     if (parameters.Count == 0)
         return Results.Content(resized_template.Replace("%result%", "").Replace("%inwikiproject%", "").Replace("%startyear%", (DateTime.Now.Year - 1).ToString())
         .Replace("%endyear%", (DateTime.Now.Year).ToString()), "text/html; charset=utf-8");
@@ -22,7 +24,8 @@ app.MapGet("/resized-pages", (HttpContext context) =>
         return Results.Content(resized_template.Replace("%result%", "Конечный год не должен быть больше начального").Replace("%inwikiproject%", inwikiproject)
             .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), "text/html; charset=utf-8");
     var pages = new List<page>();
-    string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Категория:Статьи проекта " + inwikiproject + "&cmprop=title&cmnamespace=1&cmtype=page&cmlimit=max";
+    string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=К:Статьи проекта " + inwikiproject + "&cmprop=title&cmnamespace=1&cmtype=page&cmlimit=max";
+    var site = login("ru", creds[0], creds[1], creds[3]);
     while (cont != null) {
         string apiout = cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result;
         using (var r = new XmlTextReader(new StringReader(apiout))) {
@@ -40,8 +43,7 @@ app.MapGet("/resized-pages", (HttpContext context) =>
     {
         string apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + startyear + "-01-01T00:00:00Z&titles=" +
             Uri.EscapeDataString(p.title)).Result;
-        using (var r = new XmlTextReader(new StringReader(apiout)))
-        {
+        using (var r = new XmlTextReader(new StringReader(apiout))) {
             r.WhitespaceHandling = WhitespaceHandling.None;
             while (r.Read())
                 if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
@@ -52,8 +54,7 @@ app.MapGet("/resized-pages", (HttpContext context) =>
         {
             apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + endyear + "-01-01T00:00:00Z&titles=" +
                 Uri.EscapeDataString(p.title)).Result;
-            using (var r = new XmlTextReader(new StringReader(apiout)))
-            {
+            using (var r = new XmlTextReader(new StringReader(apiout))) {
                 r.WhitespaceHandling = WhitespaceHandling.None;
                 while (r.Read())
                     if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
