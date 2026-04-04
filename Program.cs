@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Web;
 using System.Xml;
+using MySql.Data.MySqlClient;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><style> a, abbr { text-decoration: none; } </style>
@@ -84,15 +85,12 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (parameters.Count == 0)
         return Results.Content(transclusions_template.Replace("%result%", "").Replace("%wiki%", "ru.wikipedia").Replace("%cat%", "").Replace("%depth%", "0"), "text/html; charset=utf-8");
-    string wiki = parameters["wiki"];
-    string cat = parameters["cat"].Trim() ?? "";
-    int requireddepth = Convert.ToInt16(parameters["depth"]);
+    string wiki = parameters["wiki"]; string cat = parameters["cat"].Trim() ?? ""; int requireddepth = Convert.ToInt16(parameters["depth"]);
     if (requireddepth < 0)
         return Results.Content(transclusions_template.Replace("%result%", "Use non-negative depth value").Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", "0"), "text/html; charset=utf-8");
     if (cat == "")
         return Results.Content(transclusions_template.Replace("%result%", "Enter the category name").Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), "text/html; charset=utf-8");
-    var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
-    var site = login("ru", creds[0], creds[1], creds[3]);
+    var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n'); var site = login("ru", creds[0], creds[1], creds[3]);
     using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + Uri.EscapeDataString(cat)).Result)))
         while (r.Read())
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
@@ -123,6 +121,46 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
     }
 });
 
+app.MapGet("/likes", (HttpContext context) =>
+{
+    string likes_template = html_template.Replace("%title%", "Likes from and to user %user%").Replace("%form%", "likes").Replace("%body%",
+        @"User: <input name=""user"" type=""text"" value=""%user%"" required>Wiki: <input type=""text"" name=""wiki"" value=""%wiki%"" required>");
+    var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    if (parameters.Count == 0)
+        return Results.Content(likes_template.Replace("%result%", "").Replace("%user%", "").Replace("%wiki%", ""), "text/html; charset=utf-8");
+    var thanked = new Dictionary<string, int>(); var thankers = new Dictionary<string, int>(); var users = new HashSet<string>(); MySqlDataReader r; MySqlCommand command;
+    string user = parameters["user"]; string wiki = parameters["wiki"]; var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n'); var site = login("ru", creds[0], creds[1], creds[3]);
+    var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(wiki))); connect.Open();
+    command = new MySqlCommand("select cast(replace (log_title, '_', ' ') as char) from logging where log_type=\"thanks\" and log_actor=(select actor_id from actor where actor_name=\"" + user + "\");", connect) { CommandTimeout = 9999 };
+    r = command.ExecuteReader();
+    while (r.Read()) {
+        string name = r.GetString(0);
+        if (!thanked.ContainsKey(name))
+            thanked.Add(name, 1);
+        else
+            thanked[name]++;
+    }
+    r.Close();
+    command = new MySqlCommand("select cast(actor_name as char) source from (select log_actor from logging where log_type=\"thanks\" and log_title=\"" + user.Replace(' ', '_') + "\") log join actor on actor_id=log_actor;", connect) { CommandTimeout = 9999 };
+    r = command.ExecuteReader();
+    while (r.Read()) {
+        string name = r.GetString(0);
+        if (!thankers.ContainsKey(name))
+            thankers.Add(name, 1);
+        else
+            thankers[name]++;
+    }
+    string response = "<br><br>\n<table><tr><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
+    foreach (var t in thanked.OrderByDescending(t => t.Value))
+        response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> " +
+        "<a href=\"https://mbh.toolforge.org/cgi-bin/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
+    response += "</table></td><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
+    foreach (var t in thankers.OrderByDescending(t => t.Value))
+        response += "<tr><td><a href=\"https://mbh.toolforge.org/cgi-bin/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki +
+        ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">🡲</a>" + user + " </td><td>" + t.Value + "</td></tr>\n";
+    return Results.Content(likes_template.Replace("%result%", response + "</table></td></tr></table>").Replace("%user%", user).Replace("%wiki%", wiki), "text/html; charset=utf-8");
+});
+
 app.Run();
 
 HttpClient login(string lang, string login, string password, string ua) {
@@ -131,6 +169,7 @@ HttpClient login(string lang, string login, string password, string ua) {
         .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new
             FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
 }
+string url2db(string url) { return url.Replace(".", "").Replace("wikipedia", "wiki"); }
 static void searchsubcats(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, Dictionary<string, int> pages) {
     string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=title&cmlimit=max&cmnamespace=10|828";
     while (cont != null)
