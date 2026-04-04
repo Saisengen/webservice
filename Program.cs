@@ -3,22 +3,23 @@ using System.Web;
 using System.Xml;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
+string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><style> a, abbr { text-decoration: none; } </style>
+<title>%title%</title></head><body><center><form action=""%form%"">%body%<button type=""submit"">Пуск</button></form><br>%result%</center></body></html>";
 
-app.MapGet("/service", (HttpContext context) =>
+app.MapGet("/resized-pages", (HttpContext context) =>
 {
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
-    return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", context.Request.QueryString.ToString()), "text/html; charset=utf-8");
     var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
-    return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", Environment.GetEnvironmentVariable("CREDS")), "text/html; charset=utf-8");
     var site = login("ru", creds[0], creds[1], creds[3]);
+    string resized_template = html_template.Replace("%title%", "Статистика улучшенных статей за период").Replace("%form%", "resized-pages");
     if (parameters.Count == 0)
-        return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", "").Replace("%inwikiproject%", "").Replace("%startyear%", (DateTime.Now.Year - 1).ToString())
+        return Results.Content(resized_template.Replace("%result%", "").Replace("%inwikiproject%", "").Replace("%startyear%", (DateTime.Now.Year - 1).ToString())
         .Replace("%endyear%", (DateTime.Now.Year).ToString()), "text/html; charset=utf-8");
     string inwikiproject = parameters[0];
     int startyear = Convert.ToInt32(parameters[1]);
     int endyear = Convert.ToInt32(parameters[2]);
     if (endyear < startyear)
-        return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", "Конечный год не должен быть больше начального").Replace("%inwikiproject%", inwikiproject)
+        return Results.Content(resized_template.Replace("%result%", "Конечный год не должен быть больше начального").Replace("%inwikiproject%", inwikiproject)
             .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), "text/html; charset=utf-8");
     var pages = new List<page>();
     string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Категория:Статьи проекта " + inwikiproject + "&cmprop=title&cmnamespace=1&cmtype=page&cmlimit=max";
@@ -67,7 +68,7 @@ app.MapGet("/service", (HttpContext context) =>
         if (u.oldsize != 0 && u.oldsize != u.newsize)
             result += "<tr><td><a href=\"https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(u.title) + "\">" + u.title + "</a></td><td>" + u.times + "</td><td>" + (u.newsize - u.oldsize) +
                 "</td></tr>\n";
-    return Results.Content(new StreamReader("resized-pages.html").ReadToEnd().Replace("%result%", result + "</table>").Replace("%inwikiproject%", inwikiproject)
+    return Results.Content(resized_template.Replace("%result%", result + "</table>").Replace("%inwikiproject%", inwikiproject)
             .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), "text/html; charset=utf-8");
 });
 app.Run();
