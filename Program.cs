@@ -130,35 +130,39 @@ app.MapGet("/likes", (HttpContext context) =>
         return Results.Content(likes_template.Replace("%result%", "").Replace("%user%", "").Replace("%wiki%", "ru.wikipedia"), "text/html; charset=utf-8");
     var thanked = new Dictionary<string, int>(); var thankers = new Dictionary<string, int>(); var users = new HashSet<string>(); MySqlDataReader r; MySqlCommand command;
     string user = parameters["user"]; string wiki = parameters["wiki"]; var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n'); var site = login("ru", creds[0], creds[1], creds[3]);
-    var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(wiki))); connect.Open();
-    command = new MySqlCommand("select cast(replace (log_title, '_', ' ') as char) from logging where log_type=\"thanks\" and log_actor=(select actor_id from actor where actor_name=\"" + user + "\");", connect) { CommandTimeout = 9999 };
-    r = command.ExecuteReader();
-    while (r.Read()) {
-        string name = r.GetString(0);
-        if (!thanked.ContainsKey(name))
-            thanked.Add(name, 1);
-        else
-            thanked[name]++;
+    try
+    {
+        var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(wiki))); connect.Open();
+        command = new MySqlCommand("select cast(replace (log_title, '_', ' ') as char) from logging where log_type=\"thanks\" and log_actor=(select actor_id from actor where actor_name=\"" + user + "\");", connect) { CommandTimeout = 9999 };
+        r = command.ExecuteReader();
+        while (r.Read()) {
+            string name = r.GetString(0);
+            if (!thanked.ContainsKey(name))
+                thanked.Add(name, 1);
+            else
+                thanked[name]++;
+        }
+        r.Close();
+        command = new MySqlCommand("select cast(actor_name as char) source from (select log_actor from logging where log_type=\"thanks\" and log_title=\"" + user.Replace(' ', '_') + "\") log join actor on actor_id=log_actor;", connect) { CommandTimeout = 9999 };
+        r = command.ExecuteReader();
+        while (r.Read()) {
+            string name = r.GetString(0);
+            if (!thankers.ContainsKey(name))
+                thankers.Add(name, 1);
+            else
+                thankers[name]++;
+        }
+        string response = "<br><br>\n<table><tr><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
+        foreach (var t in thanked.OrderByDescending(t => t.Value))
+            response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> " +
+            "<a href=\"https://mbh.toolforge.org/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
+        response += "</table></td><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
+        foreach (var t in thankers.OrderByDescending(t => t.Value))
+            response += "<tr><td><a href=\"https://mbh.toolforge.org/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki +
+            ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">🡲</a>" + user + " </td><td>" + t.Value + "</td></tr>\n";
+        return Results.Content(likes_template.Replace("%result%", response + "</table></td></tr></table>").Replace("%user%", user).Replace("%wiki%", wiki), "text/html; charset=utf-8");
     }
-    r.Close();
-    command = new MySqlCommand("select cast(actor_name as char) source from (select log_actor from logging where log_type=\"thanks\" and log_title=\"" + user.Replace(' ', '_') + "\") log join actor on actor_id=log_actor;", connect) { CommandTimeout = 9999 };
-    r = command.ExecuteReader();
-    while (r.Read()) {
-        string name = r.GetString(0);
-        if (!thankers.ContainsKey(name))
-            thankers.Add(name, 1);
-        else
-            thankers[name]++;
-    }
-    string response = "<br><br>\n<table><tr><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
-    foreach (var t in thanked.OrderByDescending(t => t.Value))
-        response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> " +
-        "<a href=\"https://mbh.toolforge.org/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
-    response += "</table></td><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
-    foreach (var t in thankers.OrderByDescending(t => t.Value))
-        response += "<tr><td><a href=\"https://mbh.toolforge.org/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki +
-        ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">🡲</a>" + user + " </td><td>" + t.Value + "</td></tr>\n";
-    return Results.Content(likes_template.Replace("%result%", response + "</table></td></tr></table>").Replace("%user%", user).Replace("%wiki%", wiki), "text/html; charset=utf-8");
+    catch(Exception e) { return Results.Content(likes_template.Replace("%result%", e.ToString()).Replace("%user%", user).Replace("%wiki%", wiki), "text/html; charset=utf-8"); }
 });
 
 app.Run();
