@@ -5,7 +5,7 @@ using System.Xml;
 using MySql.Data.MySqlClient;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
-string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><style> a, abbr { text-decoration: none; } </style>
+string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta charset=""UTF-8""><style> a, abbr { text-decoration: none; } </style>
 <title>%title%</title></head><body><center><form action=""%form%"">%body%<button type=""submit"">Start</button></form><br>%result%</center></body></html>";
 
 app.MapGet("/resized-pages", (HttpContext context) =>
@@ -160,11 +160,10 @@ app.MapGet("/likes", (HttpContext context) =>
 
 app.MapGet("/patstats", (HttpContext context) =>
 {
-    
     Dictionary<string, stat> usertable = new Dictionary<string, stat>();
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (parameters.Count == 0)
-        return Results.Content(patstats_response("db", "ru.wikipedia", DateTime.Now.ToString("yyyy-MM-dd"), DateTime.Now.ToString("yyyy-MM-dd"), "all", "", html_template));
+        return Results.Content(patstats_response("db", "ru.wikipedia", DateTime.Now.ToString("yyyy-MM-dd"), DateTime.Now.ToString("yyyy-MM-dd"), "all", "", html_template), "text/html; charset=utf-8");
     string type = parameters["type"];
     string project = parameters["project"];
     string startdate = parameters["startdate"];
@@ -210,7 +209,7 @@ app.MapGet("/patstats", (HttpContext context) =>
         answer += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/special:log?type=review&user=" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" +
             u.Value.sum + "</td><td>" + u.Value.main + "</td><td>" + u.Value.template + "</td><td>" + u.Value.cat + "</td><td>" + u.Value.file + "</td><td>" + u.Value.portal + "</td><td>" +
             u.Value.module + "</td><td>" + u.Value.unpat + "</td></tr>";
-    return Results.Content(patstats_response(type, project, startdate, enddate, sort, answer + "</table>", html_template));
+    return Results.Content(patstats_response(type, project, startdate, enddate, sort, answer + "</table>", html_template), "text/html; charset=utf-8");
 });
 
 app.Run();
