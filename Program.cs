@@ -7,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta charset=""UTF-8""><style> a, abbr { text-decoration: none; } </style><title>%title%</title></head><body><center>
 <form action=""%form%"">%body% <button type=""submit"">Start</button></form><br>%result%</center></body></html>", meta = "text/html; charset=utf-8";
-var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n');
+var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n'); string debug = "";
 
 app.MapGet("/resized-pages", (HttpContext context) =>
 {
@@ -27,37 +27,24 @@ app.MapGet("/resized-pages", (HttpContext context) =>
     string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=К:Статьи проекта " + inwikiproject + "&cmprop=title&cmnamespace=1&cmtype=page&cmlimit=max";
     var site = login("ru.wikipedia", creds[0], creds[1], creds[3]);
     while (cont != null) {
-        string apiout = cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result;
-        using (var r = new XmlTextReader(new StringReader(apiout))) {
-            r.WhitespaceHandling = WhitespaceHandling.None;
-            r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
-            while (r.Read())
-                if (r.NodeType == XmlNodeType.Element && r.Name == "cm") {
-                    var title = r.GetAttribute("title");
-                    var p = new page() { title = title.Substring(title.IndexOf(':') + 1) };
-                    pages.Add(p);
-                }
-        }
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue"); while (r.Read())
+            if (r.NodeType == XmlNodeType.Element && r.Name == "cm") {
+                var title = r.GetAttribute("title"); var p = new page() { title = title.Substring(title.IndexOf(':') + 1) }; pages.Add(p);
+            }
     }
     foreach (var p in pages) {
         string apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + startyear + "-01-01T00:00:00Z&titles=" +
             Uri.EscapeDataString(p.title)).Result;
-        using (var r = new XmlTextReader(new StringReader(apiout))) {
-            r.WhitespaceHandling = WhitespaceHandling.None;
-            while (r.Read())
-                if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
-                    p.oldsize = Convert.ToInt32(r.GetAttribute("size"));
-
-        }
+        var r = new XmlTextReader(new StringReader(apiout)); while (r.Read())
+            if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
+                p.oldsize = Convert.ToInt32(r.GetAttribute("size"));
         if (p.oldsize != 0) {
             apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + endyear + "-01-01T00:00:00Z&titles=" +
                 Uri.EscapeDataString(p.title)).Result;
-            using (var r = new XmlTextReader(new StringReader(apiout))) {
-                r.WhitespaceHandling = WhitespaceHandling.None;
-                while (r.Read())
-                    if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
-                        p.newsize = Convert.ToInt32(r.GetAttribute("size"));
-            }
+            r = new XmlTextReader(new StringReader(apiout)); while (r.Read())
+                if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
+                    p.newsize = Convert.ToInt32(r.GetAttribute("size"));
         }
         p.times = (float)p.newsize / p.oldsize;
     }
@@ -77,7 +64,7 @@ app.MapGet("/transclusions-count", (HttpContext context) =>
         @"Pages in <input type=""text"" name=""wiki"" value=""%wiki%"" size=""11"" required>
 From category <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""without Category: prefix"">
 with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">");
-    Dictionary<string, int> pages = new Dictionary<string, int>();
+    Dictionary<string, int> pages = [];
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (parameters.Count == 0)
         return Results.Content(transclusions_template.Replace("%result%", "").Replace("%wiki%", "ru.wikipedia").Replace("%cat%", "").Replace("%depth%", "0"), meta);
@@ -101,12 +88,11 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
             int counter = 0;
             while (cont != null) {
                 var apiout = cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + Uri.EscapeDataString(cont)).Result;
-                using (var r = new XmlTextReader(new StringReader(apiout))) {
-                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
-                    while (r.Read())
-                        if (r.Name == "ei")
-                            counter++;
-                }
+                var r = new XmlTextReader(new StringReader(apiout));
+                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
+                while (r.Read())
+                    if (r.Name == "ei")
+                        counter++;
             }
             pages[page] = counter;
         }
@@ -322,7 +308,7 @@ app.MapGet("/cpf", (HttpContext context) =>
             result += "<li><a href=\"https://" + project + ".org/wiki/" + s + "\" target=\"_blank\">" + s + "</a></li>\n";
         return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", result), meta);
     }
-    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>Path not found</li>"), meta);    
+    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", /*"<li>Path not found</li>"*/debug), meta);    
 });
 
 app.Run();
@@ -347,17 +333,14 @@ static void searchsubcats_transclusion(string category, int currentdepth, int re
     cont = "";
     query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
     while (cont != null) {
-        var apiout = cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result;
-        using (var r = new XmlTextReader(new StringReader(apiout))) {
-            r.WhitespaceHandling = WhitespaceHandling.None;
-            r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
-            while (r.Read())
-                if (r.Name == "cm") {
-                    string fullcategoryname = r.GetAttribute("title"); string shortcategoryname = fullcategoryname.Substring(fullcategoryname.IndexOf(':') + 1);
-                    if (currentdepth + 1 <= requireddepth)
-                        searchsubcats_transclusion(shortcategoryname, currentdepth + 1, requireddepth, site, wiki, pages);
-                }
-        }
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
+        while (r.Read())
+            if (r.Name == "cm") {
+                string fullcategoryname = r.GetAttribute("title"); string shortcategoryname = fullcategoryname.Substring(fullcategoryname.IndexOf(':') + 1);
+                if (currentdepth + 1 <= requireddepth)
+                    searchsubcats_transclusion(shortcategoryname, currentdepth + 1, requireddepth, site, wiki, pages);
+            }
     }
 }
 static void searchsubcats_unreviewed(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, HashSet<string> candidates, bool talks)
@@ -369,10 +352,9 @@ static void searchsubcats_unreviewed(string category, int currentdepth, int requ
         while (r.Read())
             if (r.Name == "cm") {
                 string id_or_title = r.GetAttribute(talks ? "title" : "pageid");
-                if (talks && id_or_title.IndexOf(":") >= 0)
-                    id_or_title = id_or_title.Substring(id_or_title.IndexOf(":") + 1);
-                if (!candidates.Contains(id_or_title))
-                    candidates.Add(id_or_title);
+                if (talks && id_or_title.Contains(':'))
+                    id_or_title = id_or_title.Substring(id_or_title.IndexOf(':') + 1);
+                candidates.Add(id_or_title);
             }
     }
     cont = ""; //собираем категории
@@ -388,8 +370,7 @@ static void searchsubcats_unreviewed(string category, int currentdepth, int requ
             }
     }
 }
-static void put_new_action(string user, string type, int ns, Dictionary<string, stat> usertable)
-{
+static void put_new_action(string user, string type, int ns, Dictionary<string, stat> usertable) {
     if (usertable.ContainsKey(user)) {
         usertable[user].sum++;
         if (type.Contains("un"))
@@ -484,25 +465,23 @@ static List<List<T>> SplitList<T>(List<T> me, int size = 50) {
         list.Add(me.GetRange(i, Math.Min(size, me.Count - i)));
     return list;
 }
-static void catsearch(string page, string cat, string project, Dictionary<string, List<string>> upcats, List<string> path, HttpClient site) {
-    upcats.Add(page, new List<string> { "" }); List<string> layer = new List<string> { page };
+void catsearch(string page, string cat, string project, Dictionary<string, List<string>> upcats, List<string> path, HttpClient site) {
+    upcats.Add(page, [""]); List<string> layer = [page];
     while (layer.Count != 0 && !upcats.ContainsKey(cat))
         layer = processupcats(layer, project, site, upcats);
     if (upcats.ContainsKey(cat)) { var title = cat; while (title != "") { path.Add(title); title = upcats[title][0]; } }
 }
-static List<string> processupcats(List<string> layer, string project, HttpClient site, Dictionary<string, List<string>> upcats) {
+List<string> processupcats(List<string> layer, string project, HttpClient site, Dictionary<string, List<string>> upcats) {
     var result = new List<string>();
     foreach (var cats in SplitList(layer))
         foreach (var currentcat in cats) {
-            string page = "";
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=category:" + Uri.EscapeDataString(currentcat)).Result)))
-                while (r.Read())
-                    if (r.Name == "page")
-                        page = r.GetAttribute("title");
-                    else if (r.Name == "cl") {
-                        var title = r.GetAttribute("title"); upcats[page].Add(title);
-                        if (!upcats.ContainsKey(title)) { result.Add(title); upcats.Add(title, new List<string> { page }); }
-                    }
+            string page = ""; debug = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=category:" + Uri.EscapeDataString(currentcat)).Result;
+            var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=category:" + Uri.EscapeDataString(currentcat)).Result));
+            while (r.Read())
+                if (r.Name == "page")
+                    page = r.GetAttribute("title");
+                else if (r.Name == "cl") {
+                    var title = r.GetAttribute("title"); upcats[page].Add(title); if (!upcats.ContainsKey(title)) { result.Add(title); upcats.Add(title, [page]); } }
         }
     return result;
 }
