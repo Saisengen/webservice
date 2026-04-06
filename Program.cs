@@ -286,9 +286,78 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
     return Results.Content(unreviewed_response(wiki, cat, template, requireddepth, result += "</table></center>", talks, html_template), meta);
 });
 
-//app.MapGet("/test", (HttpContext context) =>
-//{
+app.MapGet("/test", (HttpContext context) =>
+{
+    return Results.Content(html_template.Replace("%result%", Environment.GetEnvironmentVariable("TOOL_DATA_DIR")), meta);
+});
 
+//app.MapGet("/cpf", (HttpContext context) =>
+//{
+//    string resized_template = html_template.Replace("%title%", "Статистика улучшенных статей за период").Replace("%form%", "resized-pages").Replace("%body%",
+//        @"<label for=""inwikiproject"">Категория:Статьи проекта </label><input type=""text"" name=""inwikiproject"" value=""%inwikiproject%"" required>
+//<label for=""startyear"">С года </label><input type=""number"" name=""startyear"" value=""%startyear%"" required>
+//<label for=""endyear"">По год </label><input type=""number"" name=""endyear"" value=""%endyear%"" required>");
+//    var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+//    if (parameters.Count == 0)
+//        return Results.Content(resized_template.Replace("%result%", "").Replace("%inwikiproject%", "").Replace("%startyear%", (DateTime.Now.Year - 1).ToString())
+//        .Replace("%endyear%", (DateTime.Now.Year).ToString()), meta);
+//    string inwikiproject = parameters[0]; int startyear = Convert.ToInt32(parameters[1]); int endyear = Convert.ToInt32(parameters[2]);
+//    if (endyear < startyear)
+//        return Results.Content(resized_template.Replace("%result%", "Конечный год не должен быть больше начального").Replace("%inwikiproject%", inwikiproject)
+//            .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), meta);
+//    var pages = new List<page>();
+//    string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=К:Статьи проекта " + inwikiproject + "&cmprop=title&cmnamespace=1&cmtype=page&cmlimit=max";
+//    var site = login("ru.wikipedia", creds[0], creds[1], creds[3]);
+//    while (cont != null)
+//    {
+//        string apiout = cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result;
+//        using (var r = new XmlTextReader(new StringReader(apiout)))
+//        {
+//            r.WhitespaceHandling = WhitespaceHandling.None;
+//            r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
+//            while (r.Read())
+//                if (r.NodeType == XmlNodeType.Element && r.Name == "cm")
+//                {
+//                    var title = r.GetAttribute("title");
+//                    var p = new page() { title = title.Substring(title.IndexOf(':') + 1) };
+//                    pages.Add(p);
+//                }
+//        }
+//    }
+//    foreach (var p in pages)
+//    {
+//        string apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + startyear + "-01-01T00:00:00Z&titles=" +
+//            Uri.EscapeDataString(p.title)).Result;
+//        using (var r = new XmlTextReader(new StringReader(apiout)))
+//        {
+//            r.WhitespaceHandling = WhitespaceHandling.None;
+//            while (r.Read())
+//                if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
+//                    p.oldsize = Convert.ToInt32(r.GetAttribute("size"));
+
+//        }
+//        if (p.oldsize != 0)
+//        {
+//            apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + endyear + "-01-01T00:00:00Z&titles=" +
+//                Uri.EscapeDataString(p.title)).Result;
+//            using (var r = new XmlTextReader(new StringReader(apiout)))
+//            {
+//                r.WhitespaceHandling = WhitespaceHandling.None;
+//                while (r.Read())
+//                    if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
+//                        p.newsize = Convert.ToInt32(r.GetAttribute("size"));
+//            }
+//        }
+//        p.times = (float)p.newsize / p.oldsize;
+//    }
+
+//    string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Статья</th><th>Изменила размер во столько раз</th><th>На столько байт</th></tr>\n";
+//    foreach (var u in pages.OrderByDescending(u => u.times))
+//        if (u.oldsize != 0 && u.oldsize != u.newsize)
+//            result += "<tr><td><a href=\"https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(u.title) + "\">" + u.title + "</a></td><td>" + u.times + "</td><td>" + (u.newsize - u.oldsize) +
+//                "</td></tr>\n";
+//    return Results.Content(resized_template.Replace("%result%", result + "</table>").Replace("%inwikiproject%", inwikiproject)
+//            .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), meta);
 //});
 
 app.Run();
@@ -436,11 +505,9 @@ static string unreviewed_response(string wiki, string cat, string template, int 
     else if (template != "")
         title = " (" + template + ")";
     string resulttext = html_template.Replace("%title%", "Unreviewed " + title).Replace("%form%", "unreviewed-pages").Replace("%body%",
-        @"Pages in <input type=""text"" name=""wiki"" value=""%wiki%"" size=""11"" required>
-From category <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""without Category: prefix"">
-<label>Article talk pages category <input type=""checkbox"" name=""talks"" %checked_talks%></label><br><br>
-with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">
-Using template <input type=""text"" name=""template"" value=""%template%"" placeholder=""with Template: prefix"">").Replace("%result%", answer).Replace("%wiki%", wiki).Replace("%cat%", cat)
+        @"Pages in <input type=""text"" name=""wiki"" value=""%wiki%"" size=""11"" required> From category <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""without Category: prefix"">
+<label>Article talk pages category <input type=""checkbox"" name=""talks"" %checked_talks%></label> with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">
+<br><br>OR using template <input type=""text"" name=""template"" value=""%template%"" placeholder=""with Template: prefix"">").Replace("%result%", answer).Replace("%wiki%", wiki).Replace("%cat%", cat)
 .Replace("%depth%", depth.ToString()).Replace("%template%", template);
     if (talks)
         resulttext = resulttext.Replace("%checked_talks%", "checked");
