@@ -7,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta charset=""UTF-8""><style> a, abbr { text-decoration: none; } </style><title>%title%</title></head><body><center>
 <form action=""%form%"">%body% <button type=""submit"">Start</button></form><br>%result%</center></body></html>", meta = "text/html; charset=utf-8";
-var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
+var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n');
 
 app.MapGet("/resized-pages", (HttpContext context) =>
 {
@@ -183,18 +183,15 @@ app.MapGet("/patstats", (HttpContext context) =>
         var site = login(project, creds[0], creds[1], creds[3]);
         string cont = "", query = "https://" + project + ".org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user|type&letype=review&leend=" + startdate +
                 "T00:00:00Z&lestart=" + enddate + "T23:59:59Z&lelimit=max";
-        
         while (cont != null) {
-            using (var xr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + cont).Result))) {
-                xr.Read(); xr.Read(); xr.Read(); cont = xr.GetAttribute("lecontinue");
-                while (xr.Read())
-                    if (xr.Name == "item") {
-                        string user = xr.GetAttribute("user");
-                        if (user == null)
-                            continue;
-                        put_new_action(user, xr.GetAttribute("action"), Convert.ToInt16(xr.GetAttribute("ns")), usertable);
-                    }
-            }
+            var xr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + cont).Result));
+            xr.Read(); xr.Read(); xr.Read(); cont = xr.GetAttribute("lecontinue"); while (xr.Read())
+                if (xr.Name == "item") {
+                    string user = xr.GetAttribute("user");
+                    if (user == null)
+                        continue;
+                    put_new_action(user, xr.GetAttribute("action"), Convert.ToInt16(xr.GetAttribute("ns")), usertable);
+                }
         }
     }
     int c = 0; string answer = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>All</th><th>Articles</th><th>Templates</th><th>Categories</th><th>Files</th><th>Portals</th>" +
@@ -286,79 +283,47 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
     return Results.Content(unreviewed_response(wiki, cat, template, requireddepth, result += "</table></center>", talks, html_template), meta);
 });
 
-app.MapGet("/test", (HttpContext context) =>
-{
-    return Results.Content(new StreamReader("cpf.html").ReadToEnd(), meta);
-});
-
-//app.MapGet("/cpf", (HttpContext context) =>
+//app.MapGet("/test", (HttpContext context) =>
 //{
-//    string resized_template = html_template.Replace("%title%", "Статистика улучшенных статей за период").Replace("%form%", "resized-pages").Replace("%body%",
-//        @"<label for=""inwikiproject"">Категория:Статьи проекта </label><input type=""text"" name=""inwikiproject"" value=""%inwikiproject%"" required>
-//<label for=""startyear"">С года </label><input type=""number"" name=""startyear"" value=""%startyear%"" required>
-//<label for=""endyear"">По год </label><input type=""number"" name=""endyear"" value=""%endyear%"" required>");
-//    var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
-//    if (parameters.Count == 0)
-//        return Results.Content(resized_template.Replace("%result%", "").Replace("%inwikiproject%", "").Replace("%startyear%", (DateTime.Now.Year - 1).ToString())
-//        .Replace("%endyear%", (DateTime.Now.Year).ToString()), meta);
-//    string inwikiproject = parameters[0]; int startyear = Convert.ToInt32(parameters[1]); int endyear = Convert.ToInt32(parameters[2]);
-//    if (endyear < startyear)
-//        return Results.Content(resized_template.Replace("%result%", "Конечный год не должен быть больше начального").Replace("%inwikiproject%", inwikiproject)
-//            .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), meta);
-//    var pages = new List<page>();
-//    string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=К:Статьи проекта " + inwikiproject + "&cmprop=title&cmnamespace=1&cmtype=page&cmlimit=max";
-//    var site = login("ru.wikipedia", creds[0], creds[1], creds[3]);
-//    while (cont != null)
-//    {
-//        string apiout = cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result;
-//        using (var r = new XmlTextReader(new StringReader(apiout)))
-//        {
-//            r.WhitespaceHandling = WhitespaceHandling.None;
-//            r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
-//            while (r.Read())
-//                if (r.NodeType == XmlNodeType.Element && r.Name == "cm")
-//                {
-//                    var title = r.GetAttribute("title");
-//                    var p = new page() { title = title.Substring(title.IndexOf(':') + 1) };
-//                    pages.Add(p);
-//                }
-//        }
-//    }
-//    foreach (var p in pages)
-//    {
-//        string apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + startyear + "-01-01T00:00:00Z&titles=" +
-//            Uri.EscapeDataString(p.title)).Result;
-//        using (var r = new XmlTextReader(new StringReader(apiout)))
-//        {
-//            r.WhitespaceHandling = WhitespaceHandling.None;
-//            while (r.Read())
-//                if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
-//                    p.oldsize = Convert.ToInt32(r.GetAttribute("size"));
-
-//        }
-//        if (p.oldsize != 0)
-//        {
-//            apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + endyear + "-01-01T00:00:00Z&titles=" +
-//                Uri.EscapeDataString(p.title)).Result;
-//            using (var r = new XmlTextReader(new StringReader(apiout)))
-//            {
-//                r.WhitespaceHandling = WhitespaceHandling.None;
-//                while (r.Read())
-//                    if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
-//                        p.newsize = Convert.ToInt32(r.GetAttribute("size"));
-//            }
-//        }
-//        p.times = (float)p.newsize / p.oldsize;
-//    }
-
-//    string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Статья</th><th>Изменила размер во столько раз</th><th>На столько байт</th></tr>\n";
-//    foreach (var u in pages.OrderByDescending(u => u.times))
-//        if (u.oldsize != 0 && u.oldsize != u.newsize)
-//            result += "<tr><td><a href=\"https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(u.title) + "\">" + u.title + "</a></td><td>" + u.times + "</td><td>" + (u.newsize - u.oldsize) +
-//                "</td></tr>\n";
-//    return Results.Content(resized_template.Replace("%result%", result + "</table>").Replace("%inwikiproject%", inwikiproject)
-//            .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), meta);
+//    return Results.Content(new StreamReader("cpf.html").ReadToEnd(), meta);
 //});
+
+app.MapGet("/cpf", (HttpContext context) =>
+{
+    Dictionary<string, List<string>> upcats = new Dictionary<string, List<string>>(); List<string> path = new List<string>(); var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    var cpf_template = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/cpf.html").ReadToEnd();
+    if (prms.Count == 0)
+        return Results.Content(cpf_template.Replace("%page%", "").Replace("%uppercat%", "").Replace("%project%", "ru.wikipedia").Replace("%response%", ""), meta);
+    string project = prms["project"]; string cat = prms["uppercat"]; string page = prms["page"]; var site = login("ru.wikipedia", creds[0], creds[1], creds[3]);
+    string apiout; try {
+        apiout = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + Uri.EscapeDataString(cat)).Result;
+    }
+    catch { return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", "ru.wikipedia").Replace("%response%", "<li>There is no such wiki (" + project + ")</li>"), meta); }
+    using (var r = new XmlTextReader(new StringReader(apiout)))
+        while (r.Read())
+            if (r.Name == "page" && r.GetAttribute("_idx") == "-1") {
+                return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>There is no such category (Category:" + cat + ") on this wiki</li>"), meta);
+            }
+    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=" + Uri.EscapeDataString(page)).Result)))
+        while (r.Read())
+            if (r.Name == "page" && r.GetAttribute("_idx") == "-1") {
+                return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>There is no such page (" + cat + ") on this wiki</li>"), meta);
+            }
+    apiout = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&format=xml&meta=siteinfo&siprop=namespaces").Result; string localcatname = "";
+    using (var r = new XmlTextReader(new StringReader(apiout)))
+        while (r.Read())
+            if (r.Name == "ns" && r.GetAttribute("id") == "14") { r.Read(); localcatname = r.Value; }
+
+    string catlocal = localcatname + ":" + cat;
+    catsearch(page, catlocal, project, upcats, path, site);
+    if (path.Count != 0) {
+        string result = "";
+        foreach (string s in path)
+            result += "<li><a href=\"https://" + project + ".org/wiki/" + s + "\" target=\"_blank\">" + s + "</a></li>\n";
+        return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", result), meta);
+    }
+    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>Path not found</li>"), meta);    
+});
 
 app.Run();
 
@@ -512,6 +477,34 @@ static string unreviewed_response(string wiki, string cat, string template, int 
     if (talks)
         resulttext = resulttext.Replace("%checked_talks%", "checked");
     return resulttext;
+}
+static List<List<T>> SplitList<T>(List<T> me, int size = 50) {
+    var list = new List<List<T>>();
+    for (int i = 0; i < me.Count; i += size)
+        list.Add(me.GetRange(i, Math.Min(size, me.Count - i)));
+    return list;
+}
+static void catsearch(string page, string cat, string project, Dictionary<string, List<string>> upcats, List<string> path, HttpClient site) {
+    upcats.Add(page, new List<string> { "" }); List<string> layer = new List<string> { page };
+    while (layer.Count != 0 && !upcats.ContainsKey(cat))
+        layer = processupcats(layer, project, site, upcats);
+    if (upcats.ContainsKey(cat)) { var title = cat; while (title != "") { path.Add(title); title = upcats[title][0]; } }
+}
+static List<string> processupcats(List<string> layer, string project, HttpClient site, Dictionary<string, List<string>> upcats) {
+    var result = new List<string>();
+    foreach (var cats in SplitList(layer))
+        foreach (var currentcat in cats) {
+            string page = "";
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=category:" + Uri.EscapeDataString(currentcat)).Result)))
+                while (r.Read())
+                    if (r.Name == "page")
+                        page = r.GetAttribute("title");
+                    else if (r.Name == "cl") {
+                        var title = r.GetAttribute("title"); upcats[page].Add(title);
+                        if (!upcats.ContainsKey(title)) { result.Add(title); upcats.Add(title, new List<string> { page }); }
+                    }
+        }
+    return result;
 }
 class page { public required string title; public int oldsize, newsize; public float times; }
 class stat { public int main, template, cat, file, portal, unpat, module, sum; }
