@@ -288,7 +288,7 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
 
 app.MapGet("/test", (HttpContext context) =>
 {
-    return Results.Content(new StreamReader("/data/project/mbh/cpf.html").ReadToEnd(), meta);
+    return Results.Content(new StreamReader("cpf.html").ReadToEnd(), meta);
 });
 
 //app.MapGet("/cpf", (HttpContext context) =>
