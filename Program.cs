@@ -288,7 +288,7 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
 
 app.MapGet("/test", (HttpContext context) =>
 {
-    return Results.Content(html_template.Replace("%result%", Environment.GetEnvironmentVariable("TOOL_DATA_DIR")), meta);
+    return Results.Content(new StreamReader("/data/project/mbh/cpf.html").ReadToEnd(), meta);
 });
 
 //app.MapGet("/cpf", (HttpContext context) =>
