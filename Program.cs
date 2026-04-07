@@ -269,10 +269,13 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
     return Results.Content(unreviewed_response(wiki, cat, template, requireddepth, result += "</table></center>", talks, html_template), meta);
 });
 
-//app.MapGet("/test", (HttpContext context) =>
-//{
-//    return Results.Content(new StreamReader("cpf.html").ReadToEnd(), meta);
-//});
+app.MapGet("/test", (HttpContext context) =>
+{
+    string result = "<body><canter><table border=1><tr><th>envvar</th><th>value</th><tr>";
+    foreach (KeyValuePair<string, string> v in Environment.GetEnvironmentVariables())
+        result += "<tr><td>" + v.Key + "</td><td>" + (v.Key.Contains("PASS") ? "" : v.Value) + "</td></tr>";
+    return Results.Content(result + "</table></center></body>", meta);
+});
 
 app.MapGet("/cpf", (HttpContext context) =>
 { //Dictionary<string, List<string>> upcats = new Dictionary<string, List<string>>();
