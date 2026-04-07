@@ -276,7 +276,7 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
 
 app.MapGet("/cpf", (HttpContext context) =>
 { //Dictionary<string, List<string>> upcats = new Dictionary<string, List<string>>();
-    var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); bool found = false; List<string> path = new List<string>(); HashSet<string> processedcats = new HashSet<string>();
+    var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); bool found = false; var path = new List<string>(); var processedcats = new HashSet<string>(); var finalpath = new List<string>();
     var cpf_template = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/cpf.html").ReadToEnd();
     if (prms.Count == 0)
         return Results.Content(cpf_template.Replace("%page%", "").Replace("%uppercat%", "").Replace("%project%", "ru.wikipedia").Replace("%response%", ""), meta);
@@ -301,7 +301,7 @@ app.MapGet("/cpf", (HttpContext context) =>
             if (r.Name == "ns" && r.GetAttribute("id") == "14") { r.Read(); localcatname = r.Value; }
 
     string purpose_cat = localcatname + ":" + cat;
-    search_upcats(project, purpose_cat, page, path, processedcats, site, ref found);
+    search_upcats(project, purpose_cat, page, path, processedcats, site, ref found, finalpath);
     if (found) {
         string result = "";
         foreach (string level in path)
@@ -459,7 +459,7 @@ static string unreviewed_response(string wiki, string cat, string template, int 
         resulttext = resulttext.Replace("%checked_talks%", "checked");
     return resulttext;
 }
-static void search_upcats(string project, string purpose_cat, string currentcat, List<string> path, HashSet<string> processedcats, HttpClient site, ref bool found) {
+static void search_upcats(string project, string purpose_cat, string currentcat, List<string> path, HashSet<string> processedcats, HttpClient site, ref bool found, List<string> finalpath) {
     if (found) { return; }
     processedcats.Add(currentcat);
     path.Add(currentcat);
@@ -468,10 +468,10 @@ static void search_upcats(string project, string purpose_cat, string currentcat,
         while (r.Read())
             if (r.Name == "cl")
                 upcats.Add(r.GetAttribute("title"));
-    if (upcats.Contains(purpose_cat)) { path.Add(purpose_cat); found = true; return; }
+    if (upcats.Contains(purpose_cat)) { path.Add(purpose_cat); found = true; finalpath = path.ToList(); return; }
     foreach (string upcat in upcats)
         if (!processedcats.Contains(upcat))
-            search_upcats(project, purpose_cat, upcat, new List<string>(path), processedcats, site, ref found);
+            search_upcats(project, purpose_cat, upcat, new List<string>(path), processedcats, site, ref found, finalpath);
 }
 class page { public required string title; public int oldsize, newsize; public float times; }
 class stat { public int main, template, cat, file, portal, unpat, module, sum; }
