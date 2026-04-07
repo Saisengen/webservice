@@ -463,7 +463,6 @@ static string unreviewed_response(string wiki, string cat, string template, int 
     return resulttext;
 }
 catpath search_upcats(string project, string purpose_cat, string currentcat, catpath path, HashSet<string> processedcats, HttpClient site) {
-    if (path.found) { /*path.path.Add(currentcat);*/ return path; }
     processedcats.Add(currentcat);
     var upcats = new List<string>();
     using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=" + Uri.EscapeDataString(currentcat)).Result)))
@@ -472,8 +471,9 @@ catpath search_upcats(string project, string purpose_cat, string currentcat, cat
                 upcats.Add(r.GetAttribute("title"));
     if (upcats.Contains(purpose_cat)) { path.path.Add(purpose_cat); path.path.Add(currentcat); path.found = true; return path; }
     foreach (string upcat in upcats)
-        if (!processedcats.Contains(upcat))
+        if (!processedcats.Contains(upcat) && !path.found)
             path = search_upcats(project, purpose_cat, upcat, path, processedcats, site);
+    if (path.found) { path.path.Add(currentcat); return path; }
     return path;
 }
 class page { public required string title; public int oldsize, newsize; public float times; }
