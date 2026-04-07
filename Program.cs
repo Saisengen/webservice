@@ -7,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta charset=""UTF-8""><style> a, abbr { text-decoration: none; } </style><title>%title%</title></head><body><center>
 <form action=""%form%"">%body% <button type=""submit"">Start</button></form><br>%result%</center></body></html>", meta = "text/html; charset=utf-8";
-var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n'); string debug = "";
+var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n'); string debug = ""; int proccounter = 0; int maxlayer = 0;
 
 app.MapGet("/resized-pages", (HttpContext context) =>
 {
@@ -308,7 +308,7 @@ app.MapGet("/cpf", (HttpContext context) =>
             result += "<li><a href=\"https://" + project + ".org/wiki/" + s + "\" target=\"_blank\">" + s + "</a></li>\n";
         return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", result), meta);
     }
-    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", /*"<li>Path not found</li>"*/debug), meta);    
+    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", /*"<li>Path not found</li>"*/"maxlayer=" + maxlayer + ", proccount=" + proccounter), meta);    
 });
 
 app.Run();
@@ -466,13 +466,13 @@ static List<List<T>> SplitList<T>(List<T> me, int size = 50) {
     return list;
 }
 void catsearch(string page, string cat, string project, Dictionary<string, List<string>> upcats, List<string> path, HttpClient site) {
-    upcats.Add(page, [""]); List<string> layer = [page];
+    upcats.Add(page, [""]); List<string> layer = [page]; if (layer.Count > maxlayer) maxlayer = layer.Count;
     while (layer.Count != 0 && !upcats.ContainsKey(cat))
         layer = processupcats(layer, project, site, upcats);
     if (upcats.ContainsKey(cat)) { var title = cat; while (title != "") { path.Add(title); title = upcats[title][0]; } }
 }
 List<string> processupcats(List<string> layer, string project, HttpClient site, Dictionary<string, List<string>> upcats) {
-    var result = new List<string>();
+    var result = new List<string>(); proccounter++;
     foreach (var cats in SplitList(layer))
         foreach (var currentcat in cats) {
             string page = ""; debug = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=category:" + Uri.EscapeDataString(currentcat)).Result;
