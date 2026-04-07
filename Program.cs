@@ -304,7 +304,7 @@ app.MapGet("/cpf", (HttpContext context) =>
     search_upcats(project, purpose_cat, page, path, processedcats, site, ref found, finalpath);
     if (found) {
         string result = "";
-        foreach (string level in path)
+        foreach (string level in finalpath)
             result += "<li><a href=\"https://" + project + ".org/wiki/" + level + "\" target=\"_blank\">" + level + "</a></li>\n";
         return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", result), meta);
     }
