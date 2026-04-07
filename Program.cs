@@ -7,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta charset=""UTF-8""><style> a, abbr { text-decoration: none; } </style><title>%title%</title></head><body><center>
 <form action=""%form%"">%body% <button type=""submit"">Start</button></form><br>%result%</center></body></html>", meta = "text/html; charset=utf-8";
-var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n'); string debug = ""; int proccounter = 0; int maxlayer = 0;
+var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n');
 
 app.MapGet("/resized-pages", (HttpContext context) =>
 {
@@ -304,11 +304,11 @@ app.MapGet("/cpf", (HttpContext context) =>
     search_upcats(project, purpose_cat, page, path, processedcats, site, ref found);
     if (found) {
         string result = "";
-        foreach (string s in path)
-            result += "<li><a href=\"https://" + project + ".org/wiki/" + s + "\" target=\"_blank\">" + s + "</a></li>\n";
+        foreach (string level in path)
+            result += "<li><a href=\"https://" + project + ".org/wiki/" + level + "\" target=\"_blank\">" + level + "</a></li>\n";
         return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", result), meta);
     }
-    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", /*"<li>Path not found</li>"*/"maxlayer=" + maxlayer + ", proccount=" + proccounter), meta);    
+    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>Path not found</li>"), meta);    
 });
 
 app.Run();
@@ -459,44 +459,19 @@ static string unreviewed_response(string wiki, string cat, string template, int 
         resulttext = resulttext.Replace("%checked_talks%", "checked");
     return resulttext;
 }
-//static List<List<T>> SplitList<T>(List<T> me, int size = 50) {
-//    var list = new List<List<T>>();
-//    for (int i = 0; i < me.Count; i += size)
-//        list.Add(me.GetRange(i, Math.Min(size, me.Count - i)));
-//    return list;
-//}
-//void catsearch(string page, string cat, string project, Dictionary<string, List<string>> upcats, List<string> path, HttpClient site) {
-//    upcats.Add(page, [""]); List<string> layer = [page]; if (layer.Count > maxlayer) maxlayer = layer.Count;
-//    while (layer.Count != 0 && !upcats.ContainsKey(cat))
-//        layer = processupcats(layer, project, site, upcats);
-//    if (upcats.ContainsKey(cat)) { var title = cat; while (title != "") { path.Add(title); title = upcats[title][0]; } }
-//}
-//List<string> processupcats(List<string> layer, string project, HttpClient site, Dictionary<string, List<string>> upcats) {
-//    var result = new List<string>(); proccounter++;
-//    foreach (var cats in SplitList(layer))
-//        foreach (var currentcat in cats) {
-//            string page = ""; debug = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=category:" + Uri.EscapeDataString(currentcat)).Result;
-//            var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=category:" + Uri.EscapeDataString(currentcat)).Result));
-//            while (r.Read())
-//                if (r.Name == "page")
-//                    page = r.GetAttribute("title");
-//                else if (r.Name == "cl") {
-//                    var title = r.GetAttribute("title"); upcats[page].Add(title); if (!upcats.ContainsKey(title)) { result.Add(title); upcats.Add(title, [page]); } }
-//        }
-//    return result;
-//}
 static void search_upcats(string project, string purpose_cat, string currentcat, List<string> path, HashSet<string> processedcats, HttpClient site, ref bool found) {
-    if (found) { path.Add(currentcat); return; }
+    if (found) { return; }
     processedcats.Add(currentcat);
+    path.Add(currentcat);
     var upcats = new List<string>();
     using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=" + Uri.EscapeDataString(currentcat)).Result)))
         while (r.Read())
             if (r.Name == "cl")
                 upcats.Add(r.GetAttribute("title"));
-    if (upcats.Contains(purpose_cat)) { path.Add(purpose_cat); path.Add(currentcat); found = true; return; }
+    if (upcats.Contains(purpose_cat)) { path.Add(purpose_cat); found = true; return; }
     foreach (string upcat in upcats)
         if (!processedcats.Contains(upcat))
-            search_upcats(project, purpose_cat, upcat, path, processedcats, site, ref found);
+            search_upcats(project, purpose_cat, upcat, new List<string>(path), processedcats, site, ref found);
 }
 class page { public required string title; public int oldsize, newsize; public float times; }
 class stat { public int main, template, cat, file, portal, unpat, module, sum; }
