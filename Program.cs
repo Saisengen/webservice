@@ -278,7 +278,7 @@ app.MapGet("/test", (HttpContext context) =>
 });
 
 app.MapGet("/cpf", (HttpContext context) =>
-{ //Dictionary<string, List<string>> upcats = new Dictionary<string, List<string>>();
+{
     var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); var path = new catpath(); var processedcats = new HashSet<string>();
     var cpf_template = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/cpf.html").ReadToEnd();
     if (prms.Count == 0)
@@ -463,7 +463,7 @@ static string unreviewed_response(string wiki, string cat, string template, int 
     return resulttext;
 }
 catpath search_upcats(string project, string purpose_cat, string currentcat, catpath path, HashSet<string> processedcats, HttpClient site) {
-    if (path.found) { path.path.Add(currentcat); return path; }
+    if (path.found) { /*path.path.Add(currentcat);*/ return path; }
     processedcats.Add(currentcat);
     var upcats = new List<string>();
     using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=" + Uri.EscapeDataString(currentcat)).Result)))
