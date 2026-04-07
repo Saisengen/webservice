@@ -272,14 +272,14 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
 app.MapGet("/test", (HttpContext context) =>
 {
     string result = "<body><canter><table border=1><tr><th>envvar</th><th>value</th><tr>";
-    foreach (KeyValuePair<string, string> v in Environment.GetEnvironmentVariables())
-        result += "<tr><td>" + v.Key + "</td><td>" + (v.Key.Contains("PASS") ? "" : v.Value) + "</td></tr>";
+    foreach (System.Collections.DictionaryEntry v in Environment.GetEnvironmentVariables())
+        result += "<tr><td>" + v.Key + "</td><td>" + (v.Key.ToString().Contains("PASS") ? "" : v.Value) + "</td></tr>";
     return Results.Content(result + "</table></center></body>", meta);
 });
 
 app.MapGet("/cpf", (HttpContext context) =>
 { //Dictionary<string, List<string>> upcats = new Dictionary<string, List<string>>();
-    var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); bool found = false; var path = new Dictionary<string, int>(); var processedcats = new HashSet<string>();
+    var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); var path = new catpath(); var processedcats = new HashSet<string>();
     var cpf_template = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/cpf.html").ReadToEnd();
     if (prms.Count == 0)
         return Results.Content(cpf_template.Replace("%page%", "").Replace("%uppercat%", "").Replace("%project%", "ru.wikipedia").Replace("%response%", ""), meta);
@@ -304,11 +304,11 @@ app.MapGet("/cpf", (HttpContext context) =>
             if (r.Name == "ns" && r.GetAttribute("id") == "14") { r.Read(); localcatname = r.Value; }
 
     string purpose_cat = localcatname + ":" + cat;
-    search_upcats(project, purpose_cat, page, path, processedcats, site, ref found, 0);
-    if (found) {
+    search_upcats(project, purpose_cat, page, path, processedcats, site);
+    if (path.found) {
         string result = "";
-        foreach (var level in path)
-            result += "<li><a href=\"https://" + project + ".org/wiki/" + level.Key + "\" target=\"_blank\">" + level.Key + " (" + level.Value + ")</a></li>\n";
+        foreach (var level in path.path)
+            result += "<li><a href=\"https://" + project + ".org/wiki/" + level + "\" target=\"_blank\">" + level + "</a></li>\n";
         return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", result), meta);
     }
     return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>Path not found</li>"), meta);    
@@ -462,19 +462,21 @@ static string unreviewed_response(string wiki, string cat, string template, int 
         resulttext = resulttext.Replace("%checked_talks%", "checked");
     return resulttext;
 }
-void search_upcats(string project, string purpose_cat, string currentcat, Dictionary<string, int> path, HashSet<string> processedcats, HttpClient site, ref bool found, int level) {
-    if (found) { path.Add(currentcat, level); return; }
+catpath search_upcats(string project, string purpose_cat, string currentcat, catpath path, HashSet<string> processedcats, HttpClient site) {
+    if (path.found) { path.path.Add(currentcat); return path; }
     processedcats.Add(currentcat);
     var upcats = new List<string>();
     using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=" + Uri.EscapeDataString(currentcat)).Result)))
         while (r.Read())
             if (r.Name == "cl")
                 upcats.Add(r.GetAttribute("title"));
-    if (upcats.Contains(purpose_cat)) { path.Add(purpose_cat, level); path.Add(currentcat, level); found = true; return; }
+    if (upcats.Contains(purpose_cat)) { path.path.Add(purpose_cat); path.path.Add(currentcat); path.found = true; return path; }
     foreach (string upcat in upcats)
         if (!processedcats.Contains(upcat))
-            search_upcats(project, purpose_cat, upcat, path, processedcats, site, ref found, level + 1);
+            path = search_upcats(project, purpose_cat, upcat, path, processedcats, site);
+    return path;
 }
 class page { public required string title; public int oldsize, newsize; public float times; }
 class stat { public int main, template, cat, file, portal, unpat, module, sum; }
 class pageinfo { public string pending_since, stable_revid; }
+class catpath { public List<string> path = new List<string>(); public bool found; }
