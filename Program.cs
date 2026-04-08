@@ -1,4 +1,5 @@
 using MySql.Data.MySqlClient;
+using Newtonsoft.Json;
 using System.Net;
 using System.Text;
 using System.Web;
@@ -192,7 +193,7 @@ app.MapGet("/patstats", (HttpContext context) =>
 
 app.MapGet("/unreviewed-pages", (HttpContext context) =>
 {
-    HashSet<string> candidates = new HashSet<string>(); Dictionary<string, pageinfo> pages = new Dictionary<string, pageinfo>();
+    HashSet<string> candidates = new HashSet<string>(); Dictionary<string, pageinfo_oldreviewed> pages = new Dictionary<string, pageinfo_oldreviewed>();
     var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (prms.Count == 0)
         return Results.Content(unreviewed_response("ru.wikipedia", "", "", 0, "", false, html_template), meta);
@@ -250,9 +251,9 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
                 string title = r.GetAttribute("title");
                 r.Read();
                 if (r.Name != "flagged")
-                    pages.Add(title, new pageinfo() { pending_since = "never", stable_revid = "" });
+                    pages.Add(title, new pageinfo_oldreviewed() { pending_since = "never", stable_revid = "" });
                 else if (r.GetAttribute("pending_since") != null)
-                    pages.Add(title, new pageinfo() { pending_since = r.GetAttribute("pending_since").Substring(0, 10), stable_revid = r.GetAttribute("stable_revid") });
+                    pages.Add(title, new pageinfo_oldreviewed() { pending_since = r.GetAttribute("pending_since").Substring(0, 10), stable_revid = r.GetAttribute("stable_revid") });
             }                
         }
     if (pages.Count == 0)
@@ -311,11 +312,98 @@ app.MapGet("/cpf", (HttpContext context) =>
             result += "<li><a href=\"https://" + project + ".org/wiki/" + level + "\" target=\"_blank\">" + level + "</a></li>\n";
         return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", result), meta);
     }
-    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>Path not found</li>"), meta);    
+    return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>Path not found</li>"), meta);
 });
 
-app.Run();
+app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
+{
+    var iterationlist = new List<string>(); var processedpages = new Dictionary<string, pageinfo_iwiki>(); var FAs = new List<string>(); var GAs = new List<string>(); var RAs = new List<string>(); var FLs = new List<string>();
+    var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    if (parameters.Count == 0)
+        return Results.Content(iwiki_response("en.wikipedia", "", "", "ru.wikipedia", false, true, false, false, false, 0, 5, ""), meta);
+    var sourcewiki = parameters["sourcewiki"]; var category = parameters["category"]; var template = parameters["template"]; var onlyarticles = parameters["pagetype"] == "articles";
+    var show_existing_pages = parameters["type"] == "exist"; var targetwiki = parameters["targetwiki"]; var wikilist = parameters["wikilist"] == "on"; var wikitable = parameters["wikitable"] == "on";
+    var requireddepth = Convert.ToInt16(parameters["depth"]); var miniwiki = Convert.ToInt16(parameters["miniwiki"]); var order_by_status = parameters["sort"] == "status";
+    if (requireddepth < 0)
+        return Results.Content(iwiki_response(sourcewiki, category, template, targetwiki, show_existing_pages, onlyarticles, order_by_status, wikilist, wikitable, 0, miniwiki, "Enter non-negative depth"), meta);
+    if (category == "" && template == "")
+        return Results.Content(iwiki_response(sourcewiki, category, template, targetwiki, show_existing_pages, onlyarticles, order_by_status, wikilist, wikitable, requireddepth, miniwiki, "Enter category, template or both"), meta);
+    var targetpages = new Dictionary<string, pageinfo_iwiki>(); var existentpageids = new List<int>(); var site = login(sourcewiki, creds[0], creds[1], creds[3]);
 
+    if (category != "")
+        searchsubcats_iwiki(category, 0, sourcewiki, site, onlyarticles, iterationlist, processedpages);
+
+    if (template != "") {
+        string nstag = (onlyarticles ? "&einamespace=0" : "");
+        string cont = "", query = "https://" + sourcewiki + ".org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + Uri.EscapeDataString(template) + nstag + "&eilimit=max";
+        while (cont != null) {
+            var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + Uri.EscapeDataString(cont)).Result));
+            r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
+            while (r.Read())
+                if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
+                    if (!processedpages.ContainsKey(r.GetAttribute("title"))) {
+                        processedpages.Add(r.GetAttribute("title"), new pageinfo_iwiki());
+                        iterationlist.Add(r.GetAttribute("title"));
+                    }
+        }
+    }
+    if (iterationlist.Count == 0)
+        return Results.Content(iwiki_response(sourcewiki, category, template, targetwiki, show_existing_pages, onlyarticles, order_by_status, wikilist, wikitable, requireddepth, miniwiki, "There are no pages in this category or using this template"), meta);
+    else {
+        gather_quality_pages(FAs, "Q5626124", site, show_existing_pages ? targetwiki : sourcewiki);
+        gather_quality_pages(GAs, "Q5303", site, show_existing_pages ? targetwiki : sourcewiki);
+        gather_quality_pages(FLs, "Q5857568", site, show_existing_pages ? targetwiki : sourcewiki);
+        gather_quality_pages(RAs, "Q13402307", site, show_existing_pages ? targetwiki : sourcewiki);
+        var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki")); connect.Open();
+        foreach (var pagename_on_sourcewiki in iterationlist) {
+            int numofiwiki = 0, itemid;
+            MySqlDataReader rd = new MySqlCommand("select ips_item_id from wb_items_per_site where ips_site_id=\"" + url2db(sourcewiki) + "\" and ips_site_page=\"" + pagename_on_sourcewiki.Replace("\"",
+                "\\\"") + "\";", connect).ExecuteReader();
+            if (rd.Read()) { itemid = rd.GetInt32(0); processedpages[pagename_on_sourcewiki].id = itemid; rd.Close(); }
+            else { rd.Close(); continue; }
+            rd = new MySqlCommand("select count(*) c from wb_items_per_site where ips_item_id=\"" + itemid + "\";", connect).ExecuteReader(); rd.Read(); numofiwiki = rd.GetInt32(0);
+            processedpages[pagename_on_sourcewiki].numofiwiki = numofiwiki; rd.Close();
+            processedpages[pagename_on_sourcewiki].status = GetStatusOnRequestedWiki(pagename_on_sourcewiki, FAs, GAs, RAs, FLs);
+            if (show_existing_pages) {
+                rd = new MySqlCommand("select cast(ips_site_page as char) from wb_items_per_site where ips_site_id=\"" + url2db(targetwiki) + "\" and ips_item_id=\"" + itemid + "\";", connect).ExecuteReader();
+                if (rd.Read()) {
+                    string pagename_on_targetwiki = rd.GetString(0);
+                    targetpages.Add(pagename_on_targetwiki, new pageinfo_iwiki() { numofiwiki = numofiwiki, status = GetStatusOnRequestedWiki(pagename_on_targetwiki, FAs, GAs, RAs, FLs) });
+                } rd.Close();
+            }
+            else {
+                rd = new MySqlCommand("select cast(ips_site_page as char) from wb_items_per_site where ips_site_id=\"" + url2db(targetwiki) + "\" and ips_item_id=\"" + itemid + "\";", connect).ExecuteReader();
+                if (rd.Read())
+                    existentpageids.Add(itemid);
+                rd.Close();
+            }
+        }
+        string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Page</th><th># of interwikis</th><th>Status</th></tr>\n";
+        if (show_existing_pages) {
+            foreach (var p in order_by_status ? targetpages.OrderByDescending(p => p.Value.status) : targetpages.OrderByDescending(p => p.Value.numofiwiki))
+                if (p.Value.numofiwiki >= miniwiki)
+                    result += "<tr><td><a href=\"https://" + targetwiki + ".org/wiki/" + Uri.EscapeDataString(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value.numofiwiki + "</td><td>" + p.Value.status + "</td></tr>\n";
+        } else {
+            foreach (var p in order_by_status ? processedpages.OrderByDescending(p => p.Value.status) : processedpages.OrderByDescending(p => p.Value.numofiwiki))
+                if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
+                    result += "<tr><td><a href=\"https://" + sourcewiki + ".org/wiki/" + Uri.EscapeDataString(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value.numofiwiki + "</td><td>" + p.Value.status + "</td></tr>\n";
+        }
+        result += "</table></center>";
+        if (wikilist && !show_existing_pages)
+            foreach (var p in order_by_status ? processedpages.OrderByDescending(p => p.Value.status) : processedpages.OrderByDescending(p => p.Value.numofiwiki))
+                if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
+                    result += "\n<br>#{{iw|||" + sourcewiki.Substring(0, sourcewiki.IndexOf('.')) + "|" + p.Key + "}}";
+        if (wikitable) {
+            result += "\n<br>{|class=\"standard sortable\"<br>! Страница !! Интервик !! Статус";
+            foreach (var p in order_by_status ? processedpages.OrderByDescending(p => p.Value.status) : processedpages.OrderByDescending(p => p.Value.numofiwiki))
+                if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
+                    result += "<br>|-<br>| [[:" + sourcewiki.Substring(0, sourcewiki.IndexOf('.')) + ":" + p.Key + "|]] || " + p.Value.numofiwiki + " || " + p.Value.status;
+            result += "<br>|}";
+        }
+        return Results.Content(iwiki_response(sourcewiki, category, template, targetwiki, show_existing_pages, onlyarticles, order_by_status, wikilist, wikitable, requireddepth, miniwiki, result), meta);
+    }
+});
+app.Run();
 HttpClient login(string project, string login, string password, string ua) {
     var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent", ua);
     var result = client.GetAsync("https://" + project + ".org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument(); doc.LoadXml(result.Content
@@ -323,7 +411,7 @@ HttpClient login(string project, string login, string password, string ua) {
             FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
 }
 string url2db(string url) { return url.Replace(".", "").Replace("wikipedia", "wiki"); }
-static void searchsubcats_transclusion(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, Dictionary<string, int> pages) {
+void searchsubcats_transclusion(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, Dictionary<string, int> pages) {
     string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=title&cmlimit=max&cmnamespace=10|828";
     while (cont != null) {
         var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
@@ -346,7 +434,7 @@ static void searchsubcats_transclusion(string category, int currentdepth, int re
             }
     }
 }
-static void searchsubcats_unreviewed(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, HashSet<string> candidates, bool talks)
+void searchsubcats_unreviewed(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, HashSet<string> candidates, bool talks)
 {
     string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=" + (talks ? "title" : "ids") + "&cmlimit=max" + (talks ? "" : "&cmnamespace=100|102|0|6|10|14");
     while (cont != null) {
@@ -373,7 +461,31 @@ static void searchsubcats_unreviewed(string category, int currentdepth, int requ
             }
     }
 }
-static void put_new_action(string user, string type, int ns, Dictionary<string, stat> usertable) {
+void searchsubcats_iwiki(string category, int currentdepth, string sourcewiki, HttpClient site, bool onlyarticles, List<string> iterationlist, Dictionary<string, pageinfo_iwiki> processedpages) {
+    string nstag = onlyarticles ? "&cmnamespace=0" : ""; //собираем страницы
+    string cont = "", query = "https://" + sourcewiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + nstag + "&cmprop=title&cmlimit=max";
+    while (cont != null) {
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue"); while (r.Read())
+            if (r.NodeType == XmlNodeType.Element && r.Name == "cm")
+                if (!processedpages.ContainsKey(r.GetAttribute("title"))) {
+                    processedpages.Add(r.GetAttribute("title"), new pageinfo_iwiki());
+                    iterationlist.Add(r.GetAttribute("title"));
+                }
+    }
+    cont = ""; query = "https://" + sourcewiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
+    while (cont != null) {
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
+        while (r.Read())
+            if (r.NodeType == XmlNodeType.Element && r.Name == "cm") {
+                string fullcategoryname = r.GetAttribute("title");
+                string shortcategoryname = fullcategoryname.Substring(fullcategoryname.IndexOf(':') + 1);
+                searchsubcats_iwiki(shortcategoryname, currentdepth + 1, sourcewiki, site, onlyarticles, iterationlist, processedpages);
+            }
+    }
+}
+void put_new_action(string user, string type, int ns, Dictionary<string, stat> usertable) {
     if (usertable.ContainsKey(user)) {
         usertable[user].sum++;
         if (type.Contains("un"))
@@ -405,7 +517,7 @@ static void put_new_action(string user, string type, int ns, Dictionary<string, 
         usertable.Add(user, stats);
     }
 }
-static string patstats_response(string type, string project, string startdate, string enddate, string sort, string answer, string html_template)
+string patstats_response(string type, string project, string startdate, string enddate, string sort, string answer, string html_template)
 {
     string result = html_template.Replace("%title%", "FlaggedRevs user activity").Replace("%form%", "patstats").Replace("%body%",
         @"Retrieve data from <label><input type=""radio"" name=""type"" value=""db"" %checked_db%>database (faster for very large time periods)</label>
@@ -421,11 +533,8 @@ static string patstats_response(string type, string project, string startdate, s
 <label><input type=""radio"" name=""sort"" value=""file"" %checked_file%>files</label>
 <label><input type=""radio"" name=""sort"" value=""portal"" %checked_portal%>portals</label>
 <label><input type=""radio"" name=""sort"" value=""module"" %checked_module%>modules</label>
-<label><input type=""radio"" name=""sort"" value=""unpat"" %checked_unpat%>unreviews</label>").Replace("%result%", answer).Replace("%project%", project).Replace("%startdate%", startdate).Replace("%enddate%", enddate);
-    if (type == "db")
-        result = result.Replace("%checked_db%", "checked");
-    else
-        result = result.Replace("%checked_api%", "checked");
+<label><input type=""radio"" name=""sort"" value=""unpat"" %checked_unpat%>unreviews</label>").Replace("%result%", answer).Replace("%project%", project).Replace("%startdate%", startdate).Replace("%enddate%",
+enddate).Replace(type == "db" ? "%checked_db%" : "%checked_api%", "checked");
     if (sort == "all")
         result = result.Replace("%checked_all%", "checked");
     else if (sort == "main")
@@ -444,7 +553,7 @@ static string patstats_response(string type, string project, string startdate, s
         result = result.Replace("%checked_unpat%", "checked");
     return result;
 }
-static string unreviewed_response(string wiki, string cat, string template, int depth, string answer, bool talks, string html_template)
+string unreviewed_response(string wiki, string cat, string template, int depth, string answer, bool talks, string html_template)
 {
     string title = "";
     if (cat != "" && template != "")
@@ -462,6 +571,35 @@ static string unreviewed_response(string wiki, string cat, string template, int 
         resulttext = resulttext.Replace("%checked_talks%", "checked");
     return resulttext;
 }
+string iwiki_response(string sourcewiki, string category, string template, string targetwiki, bool show_existing_pages, bool onlyarticles, bool order_by_status, bool wikilist, bool wikitable, int depth, int miniwiki, string answer)
+{
+    string result = html_template.Replace("%title%", "Pages without interwiki%title%").Replace("%form%", "pages-wo-iwiki").Replace("%result%", answer).Replace("%body%", @"
+Pages in <input type=""text"" name=""sourcewiki"" value=""%sourcewiki%"" size=""11"" required>
+From category <input type=""text"" name=""category"" value=""%category%"" placeholder=""without Category: prefix"">
+with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">
+Using template <input type=""text"" name=""template"" value=""%template%"" placeholder=""with Template: prefix""><br><br>
+<select size=""1"" name=""pagetype""><option value=""articles"" %selected_articles%>articles</option><option value=""allpages"" %selected_allpages%>all pages</option></select>
+<select size=""1"" name=""type""><option value=""nonexist"" %selected_nonexist%>without interwiki link</option><option value=""exist"" %selected_exist%>with interwiki link</option></select>
+ to <input type=""text"" name=""targetwiki"" value=""%targetwiki%"" size=""11"" required>
+having not less than <input type=""number"" name=""miniwiki"" value=""%miniwiki%"" style=""width:3em""> interwiki links<br><br>
+Order by <select size=""1"" name=""sort""><option value=""iwiki"" %selected_iwiki%>number of interwiki links</option><option value=""status"" %selected_status%>featured status</option></select>
+Generate a list<label><input type=""checkbox"" name=""wikilist"" %checked_wikilist%> {{iw}} templates</label>
+<label><input type=""checkbox"" name=""wikitable"" %checked_wikitable%> wikitable</label>").Replace("%sourcewiki%", sourcewiki).Replace("%category%", category).Replace("%template%", template).Replace(
+        "%targetwiki%", targetwiki).Replace("%depth%", depth.ToString()).Replace("%miniwiki%", miniwiki.ToString()).Replace(show_existing_pages ? "%selected_exist%" : "%selected_nonexist%", "selected")
+        .Replace(onlyarticles ? "%selected_articles%" : "%selected_allpages%", "selected").Replace(order_by_status ? "%selected_status%" : "%selected_iwiki%" , "selected");
+    if (wikilist)
+        result = result.Replace("%checked_wikilist%", "checked");
+    if (wikitable)
+        result = result.Replace("%checked_wikitable%", "checked");
+    string title = "";
+    if (category != "" && template != "")
+        title = " (" + category + ", " + template + ")";
+    else if (category != "")
+        title = " (" + category + ")";
+    else if (template != "")
+        title = " (" + template + ")";
+    return result.Replace("%title%", title);
+}
 catpath search_upcats(string project, string purpose_cat, string currentcat, catpath path, HashSet<string> processedcats, HttpClient site) {
     processedcats.Add(currentcat);
     var upcats = new List<string>();
@@ -476,7 +614,43 @@ catpath search_upcats(string project, string purpose_cat, string currentcat, cat
     if (path.found) { path.path.Add(currentcat); return path; }
     return path;
 }
+void gather_quality_pages(List<string> list_of_quality_pages, string wd_item, HttpClient site, string requestedwiki) {
+    string quality_template_name = "";
+    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://www.wikidata.org/w/api.php?action=wbgetentities&format=xml&ids=" + wd_item + "&props=sitelinks").Result)))
+        while (r.Read())
+            if (r.Name == "sitelink" && r.GetAttribute("site") == url2db(requestedwiki))
+                quality_template_name = r.GetAttribute("title");
+    if (quality_template_name != "") {
+        string cont = "", query = "https://" + requestedwiki + ".org/w/api.php?action=query&format=json&formatversion=2&list=embeddedin&eititle=" + Uri.EscapeDataString(quality_template_name) + "&eilimit=max";
+        while (cont != "-") {
+            Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + Uri.EscapeDataString(cont)).Result);
+            if (response.@continue != null)
+                cont = response.@continue.eicontinue;
+            else
+                cont = "-";
+            foreach (var name in response.query.embeddedin)
+                list_of_quality_pages.Add(name.title);
+        }
+    }
+}
+string GetStatusOnRequestedWiki(string page, List<string> FAs, List<string> GAs, List<string> RAs, List<string> FLs) {
+    string status = "";
+    if (FAs.Contains(page))
+        status = "<abbr title=\"Featured article\">🥇</abbr>";
+    else if (GAs.Contains(page))
+        status = "<abbr title=\"Good article\">🥈</abbr>";
+    else if (RAs.Contains(page))
+        status = "<abbr title=\"Recommended article\">🥉</abbr>";
+    else if (FLs.Contains(page))
+        status = "<abbr title=\"Featured list\">📜</abbr>";
+    return status;
+}
 class page { public required string title; public int oldsize, newsize; public float times; }
 class stat { public int main, template, cat, file, portal, unpat, module, sum; }
-class pageinfo { public string pending_since, stable_revid; }
+class pageinfo_oldreviewed { public string pending_since, stable_revid; }
 class catpath { public List<string> path = new List<string>(); public bool found; }
+class pageinfo_iwiki { public string status; public int numofiwiki, id; }
+public class Continue { public string eicontinue; public string @continue; }
+public class Embeddedin { public int pageid; public int ns; public string title; }
+public class Query { public List<Embeddedin> embeddedin; }
+public class Root { public bool batchcomplete; public Continue @continue; public Query query; }
