@@ -20,7 +20,7 @@ app.MapGet("/resized-pages", (HttpContext context) =>
     if (parameters.Count == 0)
         return Results.Content(resized_template.Replace("%result%", "").Replace("%inwikiproject%", "").Replace("%startyear%", (DateTime.Now.Year - 1).ToString())
         .Replace("%endyear%", (DateTime.Now.Year).ToString()), meta);
-    string inwikiproject = parameters[0]; int startyear = Convert.ToInt32(parameters[1]); int endyear = Convert.ToInt32(parameters[2]);
+    string inwikiproject = parameters[0]; int startyear = i(parameters[1]); int endyear = i(parameters[2]);
     if (endyear < startyear)
         return Results.Content(resized_template.Replace("%result%", "Конечный год не должен быть больше начального").Replace("%inwikiproject%", inwikiproject)
             .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), meta);
@@ -39,13 +39,13 @@ app.MapGet("/resized-pages", (HttpContext context) =>
             Uri.EscapeDataString(p.title)).Result;
         var r = new XmlTextReader(new StringReader(apiout)); while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
-                p.oldsize = Convert.ToInt32(r.GetAttribute("size"));
+                p.oldsize = i(r.GetAttribute("size"));
         if (p.oldsize != 0) {
             apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + endyear + "-01-01T00:00:00Z&titles=" +
                 Uri.EscapeDataString(p.title)).Result;
             r = new XmlTextReader(new StringReader(apiout)); while (r.Read())
                 if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
-                    p.newsize = Convert.ToInt32(r.GetAttribute("size"));
+                    p.newsize = i(r.GetAttribute("size"));
         }
         p.times = (float)p.newsize / p.oldsize;
     }
@@ -69,7 +69,7 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (parameters.Count == 0)
         return Results.Content(transclusions_template.Replace("%result%", "").Replace("%wiki%", "ru.wikipedia").Replace("%cat%", "").Replace("%depth%", "0"), meta);
-    string wiki = parameters["wiki"]; string cat = parameters["cat"].Trim() ?? ""; int requireddepth = Convert.ToInt16(parameters["depth"]);
+    string wiki = parameters["wiki"]; string cat = parameters["cat"].Trim() ?? ""; int requireddepth = i(parameters["depth"]);
     if (requireddepth < 0)
         return Results.Content(transclusions_template.Replace("%result%", "Use non-negative depth value").Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", "0"), meta);
     if (cat == "")
@@ -79,8 +79,7 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
         while (r.Read())
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
                 return Results.Content(transclusions_template.Replace("%result%", "There is no Category:" + cat + " in " + wiki).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
-    if (cat != "")
-        searchsubcats_transclusion(cat, 0, requireddepth, site, wiki, pages);
+    searchsubcats(cat, 0, requireddepth, site, wiki, pages);
     if (pages.Count == 0)
         return Results.Content(transclusions_template.Replace("%result%", "There are no pages in this category").Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
     else {
@@ -177,7 +176,7 @@ app.MapGet("/patstats", (HttpContext context) =>
                     string user = xr.GetAttribute("user");
                     if (user == null)
                         continue;
-                    put_new_action(user, xr.GetAttribute("action"), Convert.ToInt16(xr.GetAttribute("ns")), usertable);
+                    put_new_action(user, xr.GetAttribute("action"), i(xr.GetAttribute("ns")), usertable);
                 }
         }
     }
@@ -197,7 +196,7 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
     var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (prms.Count == 0)
         return Results.Content(unreviewed_response("ru.wikipedia", "", "", 0, "", false, html_template), meta);
-    bool talks = prms["talks"] == "on"; string wiki = prms["wiki"]; string cat = prms["cat"].Trim() ?? ""; string template = prms["template"].Trim() ?? ""; int requireddepth = Convert.ToInt16(prms["depth"]);
+    bool talks = prms["talks"] == "on"; string wiki = prms["wiki"]; string cat = prms["cat"].Trim() ?? ""; string template = prms["template"].Trim() ?? ""; int requireddepth = i(prms["depth"]);
     if (requireddepth < 0)
         return Results.Content(unreviewed_response(wiki, cat, template, 0, "Use non-negative depth value", talks, html_template), meta);
     if (cat == "" && template == "")
@@ -317,13 +316,13 @@ app.MapGet("/cpf", (HttpContext context) =>
 
 app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
 {
-    var iterationlist = new List<string>(); var processedpages = new Dictionary<string, pageinfo_iwiki>(); var FAs = new List<string>(); var GAs = new List<string>(); var RAs = new List<string>(); var FLs = new List<string>();
+    var pages = new Dictionary<string, pageinfo_iwiki>(); var FAs = new List<string>(); var GAs = new List<string>(); var RAs = new List<string>(); var FLs = new List<string>();
     var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (parameters.Count == 0)
         return Results.Content(iwiki_response("en.wikipedia", "", "", "ru.wikipedia", false, true, false, false, false, 0, 5, ""), meta);
     var sourcewiki = parameters["sourcewiki"]; var category = parameters["category"]; var template = parameters["template"]; var onlyarticles = parameters["pagetype"] == "articles";
     var show_existing_pages = parameters["type"] == "exist"; var targetwiki = parameters["targetwiki"]; var wikilist = parameters["wikilist"] == "on"; var wikitable = parameters["wikitable"] == "on";
-    var requireddepth = Convert.ToInt16(parameters["depth"]); var miniwiki = Convert.ToInt16(parameters["miniwiki"]); var order_by_status = parameters["sort"] == "status";
+    var requireddepth = i(parameters["depth"]); var miniwiki = i(parameters["miniwiki"]); var order_by_status = parameters["sort"] == "status";
     if (requireddepth < 0)
         return Results.Content(iwiki_response(sourcewiki, category, template, targetwiki, show_existing_pages, onlyarticles, order_by_status, wikilist, wikitable, 0, miniwiki, "Enter non-negative depth"), meta);
     if (category == "" && template == "")
@@ -331,7 +330,7 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
     var targetpages = new Dictionary<string, pageinfo_iwiki>(); var existentpageids = new List<int>(); var site = login(sourcewiki, creds[0], creds[1], creds[3]);
 
     if (category != "")
-        searchsubcats_iwiki(category, 0, sourcewiki, site, onlyarticles, iterationlist, processedpages);
+        searchsubcats_iwiki(category, 0, sourcewiki, site, onlyarticles, pages, requireddepth);
 
     if (template != "") {
         string nstag = (onlyarticles ? "&einamespace=0" : "");
@@ -341,29 +340,24 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
             r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
             while (r.Read())
                 if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
-                    if (!processedpages.ContainsKey(r.GetAttribute("title"))) {
-                        processedpages.Add(r.GetAttribute("title"), new pageinfo_iwiki());
-                        iterationlist.Add(r.GetAttribute("title"));
-                    }
+                    if (!pages.ContainsKey(r.GetAttribute("title"))) { pages.Add(r.GetAttribute("title"), new pageinfo_iwiki()); }
         }
     }
-    if (iterationlist.Count == 0)
+    if (pages.Count == 0)
         return Results.Content(iwiki_response(sourcewiki, category, template, targetwiki, show_existing_pages, onlyarticles, order_by_status, wikilist, wikitable, requireddepth, miniwiki, "There are no pages in this category or using this template"), meta);
     else {
-        gather_quality_pages(FAs, "Q5626124", site, show_existing_pages ? targetwiki : sourcewiki);
-        gather_quality_pages(GAs, "Q5303", site, show_existing_pages ? targetwiki : sourcewiki);
-        gather_quality_pages(FLs, "Q5857568", site, show_existing_pages ? targetwiki : sourcewiki);
-        gather_quality_pages(RAs, "Q13402307", site, show_existing_pages ? targetwiki : sourcewiki);
+        gather_quality_pages(FAs, "Q5626124", site, show_existing_pages ? targetwiki : sourcewiki); gather_quality_pages(GAs, "Q5303", site, show_existing_pages ? targetwiki : sourcewiki);
+        gather_quality_pages(FLs, "Q5857568", site, show_existing_pages ? targetwiki : sourcewiki); gather_quality_pages(RAs, "Q13402307", site, show_existing_pages ? targetwiki : sourcewiki);
         var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki")); connect.Open();
-        foreach (var pagename_on_sourcewiki in iterationlist) {
+        foreach (var pagename_on_sourcewiki in pages.Keys) {
             int numofiwiki = 0, itemid;
             MySqlDataReader rd = new MySqlCommand("select ips_item_id from wb_items_per_site where ips_site_id=\"" + url2db(sourcewiki) + "\" and ips_site_page=\"" + pagename_on_sourcewiki.Replace("\"",
                 "\\\"") + "\";", connect).ExecuteReader();
-            if (rd.Read()) { itemid = rd.GetInt32(0); processedpages[pagename_on_sourcewiki].id = itemid; rd.Close(); }
+            if (rd.Read()) { itemid = rd.GetInt32(0); pages[pagename_on_sourcewiki].id = itemid; rd.Close(); }
             else { rd.Close(); continue; }
             rd = new MySqlCommand("select count(*) c from wb_items_per_site where ips_item_id=\"" + itemid + "\";", connect).ExecuteReader(); rd.Read(); numofiwiki = rd.GetInt32(0);
-            processedpages[pagename_on_sourcewiki].numofiwiki = numofiwiki; rd.Close();
-            processedpages[pagename_on_sourcewiki].status = GetStatusOnRequestedWiki(pagename_on_sourcewiki, FAs, GAs, RAs, FLs);
+            pages[pagename_on_sourcewiki].numofiwiki = numofiwiki; rd.Close();
+            pages[pagename_on_sourcewiki].status = GetStatusOnRequestedWiki(pagename_on_sourcewiki, FAs, GAs, RAs, FLs);
             if (show_existing_pages) {
                 rd = new MySqlCommand("select cast(ips_site_page as char) from wb_items_per_site where ips_site_id=\"" + url2db(targetwiki) + "\" and ips_item_id=\"" + itemid + "\";", connect).ExecuteReader();
                 if (rd.Read()) {
@@ -384,24 +378,107 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
                 if (p.Value.numofiwiki >= miniwiki)
                     result += "<tr><td><a href=\"https://" + targetwiki + ".org/wiki/" + Uri.EscapeDataString(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value.numofiwiki + "</td><td>" + p.Value.status + "</td></tr>\n";
         } else {
-            foreach (var p in order_by_status ? processedpages.OrderByDescending(p => p.Value.status) : processedpages.OrderByDescending(p => p.Value.numofiwiki))
+            foreach (var p in order_by_status ? pages.OrderByDescending(p => p.Value.status) : pages.OrderByDescending(p => p.Value.numofiwiki))
                 if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
                     result += "<tr><td><a href=\"https://" + sourcewiki + ".org/wiki/" + Uri.EscapeDataString(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value.numofiwiki + "</td><td>" + p.Value.status + "</td></tr>\n";
         }
         result += "</table></center>";
         if (wikilist && !show_existing_pages)
-            foreach (var p in order_by_status ? processedpages.OrderByDescending(p => p.Value.status) : processedpages.OrderByDescending(p => p.Value.numofiwiki))
+            foreach (var p in order_by_status ? pages.OrderByDescending(p => p.Value.status) : pages.OrderByDescending(p => p.Value.numofiwiki))
                 if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
                     result += "\n<br>#{{iw|||" + sourcewiki.Substring(0, sourcewiki.IndexOf('.')) + "|" + p.Key + "}}";
         if (wikitable) {
             result += "\n<br>{|class=\"standard sortable\"<br>! Страница !! Интервик !! Статус";
-            foreach (var p in order_by_status ? processedpages.OrderByDescending(p => p.Value.status) : processedpages.OrderByDescending(p => p.Value.numofiwiki))
+            foreach (var p in order_by_status ? pages.OrderByDescending(p => p.Value.status) : pages.OrderByDescending(p => p.Value.numofiwiki))
                 if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
                     result += "<br>|-<br>| [[:" + sourcewiki.Substring(0, sourcewiki.IndexOf('.')) + ":" + p.Key + "|]] || " + p.Value.numofiwiki + " || " + p.Value.status;
             result += "<br>|}";
         }
         return Results.Content(iwiki_response(sourcewiki, category, template, targetwiki, show_existing_pages, onlyarticles, order_by_status, wikilist, wikitable, requireddepth, miniwiki, result), meta);
     }
+});
+
+app.MapGet("/page-authors", (HttpContext context) =>
+{
+    int c = 0; var stats = new page_authors_stats() { list = new Dictionary<string, int>() }; var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); var srcpages = new List<string>();
+    if (prms.Count == 0)
+        return Results.Content(authors_response("cat", "ru.wikipedia", "", 2, "", false, 0), meta);
+    var type = prms["type"]; var project = prms["wiki"]; var sign = prms["sizetype"] == "more" ? ">" : "<"; var rawsource = prms["source"]; var min_num_of_pages = i(prms["min_num_of_pages"]); var size = i(prms["size"]);
+    var site = login(project, creds[0], creds[1], creds[3]); var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r", "").Split('\n');//удаляем пробел нулевой ширины
+    foreach (var s in source) {
+        string upcased = char.ToUpper(s[0]) + s.Substring(1);
+        if (!srcpages.Contains(upcased))
+            srcpages.Add(upcased);
+    }
+    string size_condition = size == 0 ? "" : " page_len" + sign + size * 1024 + " and "; var pageids = new HashSet<int>(); var pagenames = new HashSet<string>();
+    var connect = new MySqlConnection(creds[2].Replace("%project%", project.Replace(".", "").Replace("wikipedia", "wiki"))); connect.Open(); MySqlCommand command; MySqlDataReader r;
+    if (type == "cat")
+        foreach (var s in srcpages) {
+            command = new MySqlCommand("select cl_from from categorylinks " + (size == 0 ? "" : "join page on page_id=cl_from") + " where " + size_condition + " cl_to=\"" + s + "\";", connect) { CommandTimeout = 999 };
+            r = command.ExecuteReader();
+            while (r.Read())
+                if (!pageids.Contains(r.GetInt32(0)))
+                    pageids.Add(r.GetInt32(0));
+            r.Close();
+        }
+    else if (type == "tmplt")
+        foreach (var s in srcpages)
+        {
+            command = new MySqlCommand("select tl_from from templatelinks " + (size == 0 ? "" : "join page on page_id=tl_from") + " join linktarget on lt_id=tl_target_id where " + size_condition + " lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
+            r = command.ExecuteReader();
+            while (r.Read())
+                if (!pageids.Contains(r.GetInt32(0)))
+                    pageids.Add(r.GetInt32(0));
+            r.Close();
+        }
+    else if (type == "talkcat")
+        foreach (var s in srcpages)
+        {
+            command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where " + size_condition + " cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
+            r = command.ExecuteReader();
+            while (r.Read())
+                if (!pagenames.Contains(r.GetString(0)))
+                    pagenames.Add(r.GetString(0));
+            r.Close();
+        }
+    else if (type == "talktmplt")
+        foreach (var s in srcpages)
+        {
+            command = new MySqlCommand("select cast(page_title as char) title from templatelinks join page on page_id=tl_from join linktarget on lt_id=tl_target_id where " + size_condition + " lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
+            r = command.ExecuteReader();
+            while (r.Read())
+                if (!pagenames.Contains(r.GetString(0)))
+                    pagenames.Add(r.GetString(0));
+            r.Close();
+        }
+    else if (type == "links")
+        foreach (var s in srcpages) {
+            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=links&titles=" + s + "&pllimit=max";
+            while (cont != null) {
+                var xr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&plcontinue=" + cont).Result));
+                xr.Read(); xr.Read(); xr.Read(); cont = xr.GetAttribute("plcontinue");
+                while (xr.Read())
+                    if (xr.Name == "pl")
+                        pagenames.Add(xr.GetAttribute("title").Replace(" ", "_"));
+            }
+        }
+
+    if (type == "cat" || type == "tmplt")
+        foreach (var id in pageids)
+            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id, site, stats);
+
+    else if (type == "talkcat" || type == "talktmplt" || type == "links")
+        foreach (var name in pagenames)
+            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, stats);
+
+    string result = "Total pages: " + (type == "cat" || type == "tmplt" ? pageids.Count : pagenames.Count) + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " pages." : "") +
+    (stats.error > 0 ? " Can't get author on " + stats.error + " pages." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
+    foreach (var u in stats.list.OrderByDescending(u => u.Value)) {
+        if (u.Value < min_num_of_pages)
+            break;
+        result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
+    }
+    return Results.Content(authors_response("cat", "ru.wikipedia", "", 2, "", prms["sizetype"] != "more", 0), meta);    
 });
 app.Run();
 HttpClient login(string project, string login, string password, string ua) {
@@ -410,9 +487,9 @@ HttpClient login(string project, string login, string password, string ua) {
         .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + project + ".org/w/api.php", new
             FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
 }
-string url2db(string url) { return url.Replace(".", "").Replace("wikipedia", "wiki"); }
-void searchsubcats_transclusion(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, Dictionary<string, int> pages) {
-    string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=title&cmlimit=max&cmnamespace=10|828";
+string url2db(string url) { return url.Replace(".", "").Replace("wikipedia", "wiki"); } int i(Object input) { return Convert.ToInt32(input); }
+void searchsubcats(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, Dictionary<string, int> pages) {
+    string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=title&cmlimit=max";
     while (cont != null) {
         var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
@@ -430,7 +507,7 @@ void searchsubcats_transclusion(string category, int currentdepth, int requiredd
             if (r.Name == "cm") {
                 string fullcategoryname = r.GetAttribute("title"); string shortcategoryname = fullcategoryname.Substring(fullcategoryname.IndexOf(':') + 1);
                 if (currentdepth + 1 <= requireddepth)
-                    searchsubcats_transclusion(shortcategoryname, currentdepth + 1, requireddepth, site, wiki, pages);
+                    searchsubcats(shortcategoryname, currentdepth + 1, requireddepth, site, wiki, pages);
             }
     }
 }
@@ -461,17 +538,14 @@ void searchsubcats_unreviewed(string category, int currentdepth, int requireddep
             }
     }
 }
-void searchsubcats_iwiki(string category, int currentdepth, string sourcewiki, HttpClient site, bool onlyarticles, List<string> iterationlist, Dictionary<string, pageinfo_iwiki> processedpages) {
+void searchsubcats_iwiki(string category, int currentdepth, string sourcewiki, HttpClient site, bool onlyarticles, Dictionary<string, pageinfo_iwiki> pages, int requireddepth) {
     string nstag = onlyarticles ? "&cmnamespace=0" : ""; //собираем страницы
     string cont = "", query = "https://" + sourcewiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + nstag + "&cmprop=title&cmlimit=max";
     while (cont != null) {
         var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue"); while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "cm")
-                if (!processedpages.ContainsKey(r.GetAttribute("title"))) {
-                    processedpages.Add(r.GetAttribute("title"), new pageinfo_iwiki());
-                    iterationlist.Add(r.GetAttribute("title"));
-                }
+                if (!pages.ContainsKey(r.GetAttribute("title"))) { pages.Add(r.GetAttribute("title"), new pageinfo_iwiki()); }
     }
     cont = ""; query = "https://" + sourcewiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
     while (cont != null) {
@@ -479,9 +553,9 @@ void searchsubcats_iwiki(string category, int currentdepth, string sourcewiki, H
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
         while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "cm") {
-                string fullcategoryname = r.GetAttribute("title");
-                string shortcategoryname = fullcategoryname.Substring(fullcategoryname.IndexOf(':') + 1);
-                searchsubcats_iwiki(shortcategoryname, currentdepth + 1, sourcewiki, site, onlyarticles, iterationlist, processedpages);
+                string fullcategoryname = r.GetAttribute("title"); string shortcategoryname = fullcategoryname.Substring(fullcategoryname.IndexOf(':') + 1);
+                if (currentdepth + 1 <= requireddepth)
+                    searchsubcats_iwiki(shortcategoryname, currentdepth + 1, sourcewiki, site, onlyarticles, pages, requireddepth);
             }
     }
 }
@@ -578,7 +652,7 @@ Pages in <input type=""text"" name=""sourcewiki"" value=""%sourcewiki%"" size=""
 From category <input type=""text"" name=""category"" value=""%category%"" placeholder=""without Category: prefix"">
 with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">
 Using template <input type=""text"" name=""template"" value=""%template%"" placeholder=""with Template: prefix""><br><br>
-<select size=""1"" name=""pagetype""><option value=""articles"" %selected_articles%>articles</option><option value=""allpages"" %selected_allpages%>all pages</option></select>
+Show <select size=""1"" name=""pagetype""><option value=""articles"" %selected_articles%>articles</option><option value=""allpages"" %selected_allpages%>all pages</option></select>
 <select size=""1"" name=""type""><option value=""nonexist"" %selected_nonexist%>without interwiki link</option><option value=""exist"" %selected_exist%>with interwiki link</option></select>
  to <input type=""text"" name=""targetwiki"" value=""%targetwiki%"" size=""11"" required>
 having not less than <input type=""number"" name=""miniwiki"" value=""%miniwiki%"" style=""width:3em""> interwiki links<br><br>
@@ -599,6 +673,36 @@ Generate a list<label><input type=""checkbox"" name=""wikilist"" %checked_wikili
     else if (template != "")
         title = " (" + template + ")";
     return result.Replace("%title%", title);
+}
+string authors_response(string type, string project, string source, int min_num_of_pages, string answer, bool sizetype_is_less, int size)
+{
+    string result = html_template.Replace("%title%", "Page authors stats").Replace("%form%", "page-authors").Replace("%wiki%", project).Replace("%result%", answer).Replace("%source%", source).Replace("%body%",
+        @"In <input type=""text"" name=""wiki"" value=""%wiki%"" required> get authors of pages 
+<label><input type=""radio"" name=""type"" value=""cat"" required %checked_cat%>from category</label>
+<label><input type=""radio"" name=""type"" value=""tmplt"" required %checked_tmplt%>using template</label><br>
+<label><input type=""radio"" name=""type"" value=""links"" required %checked_links%>listed on a page</label>
+<label><input type=""radio"" name=""type"" value=""talktmplt"" required %checked_talktmplt%>using talk template</label>
+<label><input type=""radio"" name=""type"" value=""talkcat"" required %checked_talkcat%>with talk category</label><br>
+with size <label><input type=""radio"" name=""sizetype"" value=""more"" required %checked_more%>more than</label>
+<label><input type=""radio"" name=""sizetype"" value=""less"" required %checked_less%>less than</label>
+<input type=""number"" name=""size"" value=""%size%"" style=""width:3em"" required> KB<br><br>
+List of categories/templates/page lists:<textarea name=""source"" placeholder=""One title per line, without 'Template'/'Category' prefixes"" wrap=""soft"" rows=""5"" cols=""60"" required>%source%</textarea>
+<br><br>Show only authors of not less than <input type=""number"" name=""min_num_of_pages"" value=""%min_num_of_pages%"" style=""width:3em"" required> pages").Replace("%size%", size.ToString()).Replace("%min_num_of_pages%", min_num_of_pages.ToString());
+    if (type == "cat")
+        result = result.Replace("%checked_cat%", "checked");
+    else if (type == "tmplt")
+        result = result.Replace("%checked_tmplt%", "checked");
+    else if (type == "talktmplt")
+        result = result.Replace("%checked_talktmplt%", "checked");
+    else if (type == "links")
+        result = result.Replace("%checked_links%", "checked");
+    else if (type == "talkcat")
+        result = result.Replace("%checked_talkcat%", "checked");
+    if (!sizetype_is_less)
+        result = result.Replace("%checked_more%", "checked");
+    else
+        result = result.Replace("%checked_less%", "checked");
+    return result;
 }
 catpath search_upcats(string project, string purpose_cat, string currentcat, catpath path, HashSet<string> processedcats, HttpClient site) {
     processedcats.Add(currentcat);
@@ -645,12 +749,31 @@ string GetStatusOnRequestedWiki(string page, List<string> FAs, List<string> GAs,
         status = "<abbr title=\"Featured list\">📜</abbr>";
     return status;
 }
+void get_first_author(string request, HttpClient site, page_authors_stats stats) {
+    try//обращение к БД гораздо медленнее
+    {
+        var r = new XmlTextReader(new StringReader(site.GetStringAsync(request).Result));
+        while (r.Read())
+            if (r.Name == "rev") {
+                if (r.GetAttribute("userhidden") == "")
+                    stats.hidden++;
+                else {
+                    string user = r.GetAttribute("user");
+                    if (stats.list.ContainsKey(user))
+                        stats.list[user]++;
+                    else stats.list.Add(user, 1);
+                }
+            }
+    }
+    catch { stats.error++; }
+}
 class page { public required string title; public int oldsize, newsize; public float times; }
 class stat { public int main, template, cat, file, portal, unpat, module, sum; }
 class pageinfo_oldreviewed { public string pending_since, stable_revid; }
 class catpath { public List<string> path = new List<string>(); public bool found; }
 class pageinfo_iwiki { public string status; public int numofiwiki, id; }
-public class Continue { public string eicontinue; public string @continue; }
-public class Embeddedin { public int pageid; public int ns; public string title; }
-public class Query { public List<Embeddedin> embeddedin; }
-public class Root { public bool batchcomplete; public Continue @continue; public Query query; }
+class page_authors_stats { public Dictionary<string, int> list; public int hidden, error; }
+class Continue { public string eicontinue; public string @continue; }
+class Embeddedin { public int pageid; public int ns; public string title; }
+class Query { public List<Embeddedin> embeddedin; }
+class Root { public bool batchcomplete; public Continue @continue; public Query query; }
