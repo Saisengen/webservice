@@ -439,11 +439,10 @@ app.MapGet("/page-authors", (HttpContext context) =>
             }
         }
     }
-    if (type == "cat" || type == "tmplt")
+    if (type == "tmplt")
         foreach (var id in pages.Keys)
             get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id, site, stats);
-
-    else if (type == "talkcat" || type == "talktmplt" || type == "links")
+    else
         foreach (var name in pages.Keys)
             get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, stats);
 
