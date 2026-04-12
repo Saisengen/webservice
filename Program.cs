@@ -64,7 +64,7 @@ app.MapGet("/transclusions-count", (HttpContext context) =>
         @"Pages in <input type=""text"" name=""wiki"" value=""%wiki%"" size=""11"" required>
 From category <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""without Category: prefix"">
 with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">");
-    var pages = new page_authors_stats() { list = new Dictionary<string, int>()}; var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    var pages = new Dictionary<string, int>(); var parameters = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (parameters.Count == 0)
         return Results.Content(transclusions_template.Replace("%result%", "").Replace("%wiki%", "ru.wikipedia").Replace("%cat%", "").Replace("%depth%", "0"), meta);
     string wiki = parameters["wiki"]; string cat = parameters["cat"].Trim() ?? ""; int requireddepth = i(parameters["depth"]);
@@ -78,10 +78,10 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
                 return Results.Content(transclusions_template.Replace("%result%", "There is no Category:" + cat + " in " + wiki).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
     searchsubcats(cat, 0, requireddepth, site, wiki, pages);
-    if (pages.list.Count == 0)
+    if (pages.Count == 0)
         return Results.Content(transclusions_template.Replace("%result%", "There are no pages in this category").Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
     else {
-        foreach (var page in pages.list.Keys) {
+        foreach (var page in pages.Keys) {
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + Uri.EscapeDataString(page) + "&eilimit=max";
             int counter = 0;
             while (cont != null) {
@@ -91,10 +91,10 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
                     if (r.Name == "ei")
                         counter++;
             }
-            pages.list[page] = counter;
+            pages[page] = counter;
         }
         string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Page</th><th>Transclusions</th></tr>\n";
-        foreach (var p in pages.list.OrderByDescending(p => p.Value))
+        foreach (var p in pages.OrderByDescending(p => p.Value))
             result += "<tr><td><a target=\"_blank\" href=\"https://" + wiki + ".org/wiki/" + Uri.EscapeDataString(p.Key).Replace("%3A", ":").Replace("%20", "_") + "\">" + p.Key + "</a></td><td>" + p.Value + "</td></tr>\n";
         return Results.Content(transclusions_template.Replace("%result%", result + "</table>").Replace(" % wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
     }
@@ -397,7 +397,7 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
 
 app.MapGet("/page-authors", (HttpContext context) =>
 {
-    int c = 0; var pages = new page_authors_stats() { list = new Dictionary<string, int>() }; var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    int c = 0; var stats = new page_authors_stats() { list = new Dictionary<string, int>() }; var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); var pages = new Dictionary<string, int>();
     if (prms.Count == 0)
         return Results.Content(authors_response("cat", "ru.wikipedia", "", 2, "", 0), meta);
     var type = prms["type"]; var project = prms["wiki"]; var rawsource = prms["source"];var min_num_of_pages = i(prms["min_num_of_pages"]); var depth = i(prms["depth"]);
@@ -411,21 +411,21 @@ app.MapGet("/page-authors", (HttpContext context) =>
             command = new MySqlCommand("select tl_from from templatelinks join linktarget on lt_id=tl_target_id where lt_title=\"" + upcased + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
             r = command.ExecuteReader();
             while (r.Read())
-                pages.list.Add(r.GetInt32(0).ToString(), 0);
+                pages.Add(r.GetInt32(0).ToString(), 0);
             r.Close();
         }
         else if (type == "talkcat") {
             command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where cl_to=\"" + upcased + "\";", connect) { CommandTimeout = 99999 };
             r = command.ExecuteReader();
             while (r.Read())
-                pages.list.Add(r.GetString(0), 0);
+                pages.Add(r.GetString(0), 0);
             r.Close();
         }
         else if (type == "talktmplt") {
             command = new MySqlCommand("select cast(page_title as char) title from templatelinks join page on page_id=tl_from join linktarget on lt_id=tl_target_id where lt_title=\"" + upcased + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
             r = command.ExecuteReader();
             while (r.Read())
-                pages.list.Add(r.GetString(0), 0);
+                pages.Add(r.GetString(0), 0);
             r.Close();
         }
         else if (type == "links") {
@@ -435,21 +435,21 @@ app.MapGet("/page-authors", (HttpContext context) =>
                 xr.Read(); xr.Read(); xr.Read(); cont = xr.GetAttribute("plcontinue");
                 while (xr.Read())
                     if (xr.Name == "pl")
-                        pages.list.Add(xr.GetAttribute("title").Replace(" ", "_"), 0);
+                        pages.Add(xr.GetAttribute("title").Replace(" ", "_"), 0);
             }
         }
     }
     if (type == "cat" || type == "tmplt")
-        foreach (var id in pages.list.Keys)
-            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id, site, pages);
+        foreach (var id in pages.Keys)
+            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id, site, stats);
 
     else if (type == "talkcat" || type == "talktmplt" || type == "links")
-        foreach (var name in pages.list.Keys)
-            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, pages);
+        foreach (var name in pages.Keys)
+            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, stats);
 
-    string result = "Total pages: " + pages.list.Count + "." + (pages.hidden > 0 ? " Author is hidden on " + pages.hidden + " pages." : "") +
-    (pages.error > 0 ? " Can't get author on " + pages.error + " pages." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
-    foreach (var u in pages.list.OrderByDescending(u => u.Value)) {
+    string result = "Total pages: " + stats.list.Count + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " pages." : "") +
+    (stats.error > 0 ? " Can't get author on " + stats.error + " pages." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
+    foreach (var u in stats.list.OrderByDescending(u => u.Value)) {
         if (u.Value < min_num_of_pages)
             break;
         result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
@@ -464,15 +464,15 @@ HttpClient login(string project, string login, string password, string ua) {
             FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
 }
 string url2db(string url) { return url.Replace(".", "").Replace("wikipedia", "wiki"); } int i(Object input) { return Convert.ToInt32(input); }
-void searchsubcats(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, page_authors_stats pages) {
+void searchsubcats(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, Dictionary<string, int> pages) {
     string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=title&cmlimit=max";
     while (cont != null) {
         var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
         while (r.Read())
             if (r.Name == "cm")
-                if (!pages.list.ContainsKey(r.GetAttribute("title")))
-                    pages.list.Add(r.GetAttribute("title"), 0);
+                if (!pages.ContainsKey(r.GetAttribute("title")))
+                    pages.Add(r.GetAttribute("title"), 0);
     }
     cont = "";
     query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
