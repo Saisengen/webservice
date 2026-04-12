@@ -4,8 +4,7 @@ using System.Net;
 using System.Text;
 using System.Web;
 using System.Xml;
-var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
+var builder = WebApplication.CreateBuilder(args); var app = builder.Build();
 string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta charset=""UTF-8""><style> a, abbr { text-decoration: none; } </style><title>%title%</title></head><body><center>
 <form action=""%form%"">%body% <button type=""submit"">Start</button></form><br>%result%</center></body></html>", meta = "text/html; charset=utf-8";
 var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n');
@@ -654,17 +653,16 @@ Generate a list<label><input type=""checkbox"" name=""wikilist"" %checked_wikili
 }
 string authors_response(string type, string project, string source, int min_num_of_pages, string answer, int depth)
 {
-    string result = html_template.Replace("%title%", "Page authors stats").Replace("%form%", "page-authors").Replace("%wiki%", project).Replace("%result%", answer).Replace("%source%", source).Replace("%body%",
+    string result = html_template.Replace("%title%", "Page authors stats").Replace("%form%", "page-authors").Replace("%body%",
         @"In <input type=""text"" name=""wiki"" value=""%wiki%"" required> get authors of pages 
-<label><input type=""radio"" name=""type"" value=""cat"" required %checked_cat%>from category</label>
-<label><input type=""radio"" name=""type"" value=""tmplt"" required %checked_tmplt%>using template</label><br>
-<label><input type=""radio"" name=""type"" value=""links"" required %checked_links%>listed on a page</label>
+<label><input type=""radio"" name=""type"" value=""cat"" required %checked_cat%>from category</label> with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em""><br>
+<label><input type=""radio"" name=""type"" value=""tmplt"" required %checked_tmplt%>using template</label><label>
+<input type=""radio"" name=""type"" value=""links"" required %checked_links%>listed on a page</label>
 <label><input type=""radio"" name=""type"" value=""talktmplt"" required %checked_talktmplt%>using talk template</label>
 <label><input type=""radio"" name=""type"" value=""talkcat"" required %checked_talkcat%>with talk category</label><br>
- with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">
 List of categories/templates/page lists:<textarea name=""source"" placeholder=""One title per line, without 'Template'/'Category' prefixes"" wrap=""soft"" rows=""5"" cols=""60"" required>%source%</textarea>
-<br><br>Show only authors of not less than <input type=""number"" name=""min_num_of_pages"" value=""%min_num_of_pages%"" style=""width:3em"" required> pages").Replace("%depth%", depth.ToString())
-.Replace("%min_num_of_pages%", min_num_of_pages.ToString());
+<br><br>Show only authors of not less than <input type=""number"" name=""min_num_of_pages"" value=""%min_num_of_pages%"" style=""width:2em"" required> pages").Replace("%depth%", depth.ToString())
+.Replace("%min_num_of_pages%", min_num_of_pages.ToString()).Replace("%wiki%", project).Replace("%result%", answer).Replace("%source%", source);
     if (type == "cat")
         result = result.Replace("%checked_cat%", "checked");
     else if (type == "tmplt")
