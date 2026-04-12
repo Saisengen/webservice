@@ -451,8 +451,8 @@ app.MapGet("/page-authors", (HttpContext context) =>
     string result = "Total pages: " + pages.list.Count + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " pages." : "") +
     (stats.error > 0 ? " Can't get author on " + stats.error + " pages." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
     foreach (var u in stats.list.OrderByDescending(u => u.Value)) {
-        if (u.Value < min_num_of_pages)
-            break;
+        //if (u.Value < min_num_of_pages)
+        //    break;
         result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
     }
     return Results.Content(authors_response(type, project, rawsource, min_num_of_pages, result, depth), meta);    
