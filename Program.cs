@@ -429,7 +429,7 @@ app.MapGet("/page-authors", (HttpContext context) =>
             r.Close();
         }
         else if (type == "links") {
-            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=links&titles=" + upcased + "&pllimit=max";
+            string cont = "", query = "https://" + project + ".org/w/api.php?action=query&format=xml&prop=links&titles=" + upcased + "&pllimit=max";
             while (cont != null) {
                 var xr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&plcontinue=" + cont).Result));
                 xr.Read(); xr.Read(); xr.Read(); cont = xr.GetAttribute("plcontinue");
@@ -446,8 +446,8 @@ app.MapGet("/page-authors", (HttpContext context) =>
         foreach (var name in pages.Keys)
             get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, stats);
 
-    string result = "Total pages: " + pages.Count + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " pages." : "") +
-    (stats.error > 0 ? " Can't get author on " + stats.error + " pages." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
+    string result = "Total pages: " + pages.Count + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " page(s)." : "") +
+    (stats.error > 0 ? " Can't get author on " + stats.error + " page(s)." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
     foreach (var u in stats.list.OrderByDescending(u => u.Value)) {
         if (u.Value < min_num_of_pages)
             break;
@@ -655,7 +655,7 @@ string authors_response(string type, string project, string source, int min_num_
         @"In <input type=""text"" name=""wiki"" value=""%wiki%"" required> get authors of pages 
 <label><input type=""radio"" name=""type"" value=""cat"" required %checked_cat%>from category</label> with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em""><br>
 <label><input type=""radio"" name=""type"" value=""tmplt"" required %checked_tmplt%>using template</label><label>
-<input type=""radio"" name=""type"" value=""links"" required %checked_links%>listed on a page</label>
+<input type=""radio"" name=""type"" value=""links"" required %checked_links%>linked from a page</label>
 <label><input type=""radio"" name=""type"" value=""talktmplt"" required %checked_talktmplt%>using talk template</label>
 <label><input type=""radio"" name=""type"" value=""talkcat"" required %checked_talkcat%>with talk category</label><br>
 List of categories/templates/page lists:<textarea name=""source"" placeholder=""One title per line, without 'Template'/'Category' prefixes"" wrap=""soft"" rows=""5"" cols=""60"" required>%source%</textarea>
