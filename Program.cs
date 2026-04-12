@@ -415,7 +415,7 @@ app.MapGet("/page-authors", (HttpContext context) =>
             r.Close();
         }
         else if (type == "talkcat") {
-            command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where cl_to=\"" + upcased + "\";", connect) { CommandTimeout = 99999 };
+            command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where cl_target_id=\"" + upcased + "\";", connect) { CommandTimeout = 99999 };
             r = command.ExecuteReader();
             while (r.Read())
                 pages.Add(r.GetString(0), 0);
