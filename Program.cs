@@ -455,7 +455,7 @@ app.MapGet("/page-authors", (HttpContext context) =>
             break;
         result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
     }
-    return Results.Content(authors_response("cat", "ru.wikipedia", "", 2, "", depth), meta);    
+    return Results.Content(authors_response(type, project, source, min_num_of_pages, result, depth), meta);    
 });
 app.Run();
 HttpClient login(string project, string login, string password, string ua) {
