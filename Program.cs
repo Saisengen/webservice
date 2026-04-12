@@ -150,8 +150,7 @@ app.MapGet("/patstats", (HttpContext context) =>
     if (type == "db") {
         var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(project))); connect.Open();
         var squery = new MySqlCommand("select log_action, log_namespace, cast(actor_name as char) user from logging join actor on log_actor=actor_id where log_type=\"review\" and " +
-            "log_timestamp >" + startdate.Replace("-", "") + "000000 and log_timestamp<" + enddate.Replace("-", "") + "235959", connect);
-        var r = squery.ExecuteReader();
+            "log_timestamp >" + startdate.Replace("-", "") + "000000 and log_timestamp<" + enddate.Replace("-", "") + "235959", connect); var r = squery.ExecuteReader();
         while (r.Read()) {
             string user = r.GetString("user");
             if (user == null)
@@ -293,7 +292,7 @@ app.MapGet("/cpf", (HttpContext context) =>
     using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=" + Uri.EscapeDataString(page)).Result)))
         while (r.Read())
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1") {
-                return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>There is no such page (" + cat + ") on this wiki</li>"), meta);
+                return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>There is no such page (" + page + ") on this wiki</li>"), meta);
             }
     apiout = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&format=xml&meta=siteinfo&siprop=namespaces").Result; string localcatname = "";
     using (var r = new XmlTextReader(new StringReader(apiout)))
@@ -569,8 +568,8 @@ void put_new_action(string user, string type, int ns, Dictionary<string, stat> u
 string patstats_response(string type, string project, string startdate, string enddate, string sort, string answer, string html_template)
 {
     string result = html_template.Replace("%title%", "FlaggedRevs user activity").Replace("%form%", "patstats").Replace("%body%",
-        @"Retrieve data from <label><input type=""radio"" name=""type"" value=""db"" %checked_db%>database (faster for very large time periods)</label>
-<label><input type=""radio"" name=""type"" value=""api"" %checked_api%>API</label><br><br>
+        @"Retrieve data from <label><input type=""radio"" name=""type"" value=""db"" %checked_db%>database (faster for very long time periods)</label>
+<label><input type=""radio"" name=""type"" value=""api"" %checked_api%>API (faster for shorter time periods)</label><br><br>
 <label>Wiki: <input type=""text"" name=""project"" value=""%project%"" required></label>
 <label>From <input type=""date"" name=""startdate"" value=""%startdate%"" required></label>
 <label>To <input type=""date"" name=""enddate"" value=""%enddate%"" required> (including the date)</label>
@@ -613,7 +612,7 @@ string unreviewed_response(string wiki, string cat, string template, int depth, 
         title = " (" + template + ")";
     string resulttext = html_template.Replace("%title%", "Unreviewed " + title).Replace("%form%", "unreviewed-pages").Replace("%body%",
         @"Pages in <input type=""text"" name=""wiki"" value=""%wiki%"" size=""11"" required> From category <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""without Category: prefix"">
-<label>Article talk pages category <input type=""checkbox"" name=""talks"" %checked_talks%></label> with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">
+ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em""> <label>This is an article talk pages category <input type=""checkbox"" name=""talks"" %checked_talks%></label>
 <br><br>OR using template <input type=""text"" name=""template"" value=""%template%"" placeholder=""with Template: prefix"">").Replace("%result%", answer).Replace("%wiki%", wiki).Replace("%cat%", cat)
 .Replace("%depth%", depth.ToString()).Replace("%template%", template);
     if (talks)
@@ -628,7 +627,7 @@ From category <input type=""text"" name=""category"" value=""%category%"" placeh
 with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" style=""width:2em"">
 Using template <input type=""text"" name=""template"" value=""%template%"" placeholder=""with Template: prefix""><br><br>
 Show <select size=""1"" name=""pagetype""><option value=""articles"" %selected_articles%>articles</option><option value=""allpages"" %selected_allpages%>all pages</option></select>
-<select size=""1"" name=""type""><option value=""nonexist"" %selected_nonexist%>without interwiki link</option><option value=""exist"" %selected_exist%>with interwiki link</option></select>
+<select size=""1"" name=""type""><option value=""nonexist"" %selected_nonexist%>without</option><option value=""exist"" %selected_exist%>with</option></select> interwiki link
  to <input type=""text"" name=""targetwiki"" value=""%targetwiki%"" size=""11"" required>
 having not less than <input type=""number"" name=""miniwiki"" value=""%miniwiki%"" style=""width:3em""> interwiki links<br><br>
 Order by <select size=""1"" name=""sort""><option value=""iwiki"" %selected_iwiki%>number of interwiki links</option><option value=""status"" %selected_status%>featured status</option></select>
