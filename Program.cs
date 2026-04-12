@@ -397,11 +397,10 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
 
 app.MapGet("/page-authors", (HttpContext context) =>
 {
-    int c = 0; var stats = new page_authors_stats() { list = new Dictionary<string, int>() }; var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    int c = 0; var pages = new page_authors_stats() { list = new Dictionary<string, int>() }; var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
     if (prms.Count == 0)
         return Results.Content(authors_response("cat", "ru.wikipedia", "", 2, "", 0), meta);
     var type = prms["type"]; var project = prms["wiki"]; var rawsource = prms["source"];var min_num_of_pages = i(prms["min_num_of_pages"]); var depth = i(prms["depth"]);
-    var pages = new page_authors_stats() { list = new Dictionary<string, int>() };
     var site = login(project, creds[0], creds[1], creds[3]); var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r", "").Split('\n');//удаляем пробел нулевой ширины
     var connect = new MySqlConnection(creds[2].Replace("%project%", project.Replace(".", "").Replace("wikipedia", "wiki"))); connect.Open(); MySqlCommand command; MySqlDataReader r;
     foreach (var s in source) {
@@ -442,17 +441,17 @@ app.MapGet("/page-authors", (HttpContext context) =>
     }
     if (type == "cat" || type == "tmplt")
         foreach (var id in pages.list.Keys)
-            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id, site, stats);
+            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id, site, pages);
 
     else if (type == "talkcat" || type == "talktmplt" || type == "links")
         foreach (var name in pages.list.Keys)
-            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, stats);
+            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, pages);
 
-    string result = "Total pages: " + pages.list.Count + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " pages." : "") +
-    (stats.error > 0 ? " Can't get author on " + stats.error + " pages." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
-    foreach (var u in stats.list.OrderByDescending(u => u.Value)) {
-        //if (u.Value < min_num_of_pages)
-        //    break;
+    string result = "Total pages: " + pages.list.Count + "." + (pages.hidden > 0 ? " Author is hidden on " + pages.hidden + " pages." : "") +
+    (pages.error > 0 ? " Can't get author on " + pages.error + " pages." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
+    foreach (var u in pages.list.OrderByDescending(u => u.Value)) {
+        if (u.Value < min_num_of_pages)
+            break;
         result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
     }
     return Results.Content(authors_response(type, project, rawsource, min_num_of_pages, result, depth), meta);    
