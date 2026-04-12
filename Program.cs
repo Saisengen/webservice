@@ -446,7 +446,7 @@ app.MapGet("/page-authors", (HttpContext context) =>
         foreach (var name in pages.Keys)
             get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, stats);
 
-    string result = "Total pages: " + stats.list.Count + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " pages." : "") +
+    string result = "Total pages: " + pages.Count + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " pages." : "") +
     (stats.error > 0 ? " Can't get author on " + stats.error + " pages." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
     foreach (var u in stats.list.OrderByDescending(u => u.Value)) {
         if (u.Value < min_num_of_pages)
