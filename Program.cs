@@ -127,7 +127,7 @@ app.MapGet("/likes", (HttpContext context) =>
             thankers.Add(name, 1);
         else
             thankers[name]++;
-    }
+    } connect.Close();
     string response = "<br><br>\n<table><tr><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
     foreach (var t in thanked.OrderByDescending(t => t.Value))
         response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> " +
@@ -159,7 +159,7 @@ app.MapGet("/patstats", (HttpContext context) =>
             r.GetBytes(0, 0, buffer, 0, 10);
             int ns = r.GetInt16("log_namespace");
             put_new_action(user, Encoding.UTF8.GetString(buffer, 0, buffer.Length), ns, usertable);
-        }
+        } connect.Close();
     }
     if (type == "api") {
         var site = login(project, creds[0], creds[1], creds[3]);
@@ -189,10 +189,11 @@ app.MapGet("/patstats", (HttpContext context) =>
 app.MapGet("/unreviewed-pages", (HttpContext context) =>
 {
     HashSet<string> candidates = new HashSet<string>(); Dictionary<string, pageinfo_oldreviewed> pages = new Dictionary<string, pageinfo_oldreviewed>();
-    var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); bool talks; string wiki, cat, template; int requireddepth;
     if (prms.Count == 0)
         return Results.Content(unreviewed_response("ru.wikipedia", "", "", 0, "", false, html_template), meta);
-    bool talks = prms["talks"] == "on"; string wiki = prms["wiki"]; string cat = prms["cat"].Trim() ?? ""; string template = prms["template"].Trim() ?? ""; int requireddepth = i(prms["depth"]);
+    try { talks = prms["talks"] == "on"; wiki = prms["wiki"]; cat = prms["cat"].Trim() ?? ""; template = prms["template"].Trim() ?? ""; requireddepth = i(prms["depth"]); }
+    catch { return Results.Content(unreviewed_response("ru.wikipedia", "", "", 0, "", false, html_template), meta); }
     if (requireddepth < 0)
         return Results.Content(unreviewed_response(wiki, cat, template, 0, "Use non-negative depth value", talks, html_template), meta);
     if (cat == "" && template == "")
@@ -367,7 +368,7 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
                     existentpageids.Add(itemid);
                 rd.Close();
             }
-        }
+        } connect.Close();
         string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Page</th><th># of interwikis</th><th>Status</th></tr>\n";
         if (show_existing_pages) {
             foreach (var p in order_by_status ? targetpages.OrderByDescending(p => p.Value.status) : targetpages.OrderByDescending(p => p.Value.numofiwiki))
@@ -396,10 +397,12 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
 
 app.MapGet("/page-authors", (HttpContext context) =>
 {
-    int c = 0; var stats = new page_authors_stats() { list = new Dictionary<string, int>() }; var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); var pages = new Dictionary<string, int>();
+    int c = 0; var stats = new page_authors_stats() { list = new Dictionary<string, int>() }; var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    var pages = new Dictionary<string, int>(); string type, project, rawsource; int min_num_of_pages, depth;
     if (prms.Count == 0)
         return Results.Content(authors_response("cat", "ru.wikipedia", "", 2, "", 0), meta);
-    var type = prms["type"]; var project = prms["wiki"]; var rawsource = prms["source"];var min_num_of_pages = i(prms["min_num_of_pages"]); var depth = i(prms["depth"]);
+    try { type = prms["type"]; project = prms["wiki"]; rawsource = prms["source"]; min_num_of_pages = i(prms["min_num_of_pages"]); depth = i(prms["depth"]); }
+    catch { return Results.Content(authors_response("cat", "ru.wikipedia", "", 2, "", 0), meta); }
     var site = login(project, creds[0], creds[1], creds[3]); var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r", "").Split('\n');//удаляем пробел нулевой ширины
     var connect = new MySqlConnection(creds[2].Replace("%project%", project.Replace(".", "").Replace("wikipedia", "wiki"))); connect.Open(); MySqlCommand command; MySqlDataReader r;
     foreach (var s in source) {
@@ -437,7 +440,7 @@ app.MapGet("/page-authors", (HttpContext context) =>
                         pages.Add(xr.GetAttribute("title").Replace(" ", "_"), 0);
             }
         }
-    }
+    } connect.Close();
     if (type == "tmplt")
         foreach (var id in pages.Keys)
             get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id, site, stats);
