@@ -456,7 +456,7 @@ app.MapGet("/patlist", (HttpContext context) =>
         return Results.Content(patlist_response("ru.wikipedia", "", "all", 1, 50, "all", "", html_template), meta);
     string project = prms["project"]; string sort = prms["sort"]; int days = int.Parse(prms["days"]); int diffsize = int.Parse(prms["diffsize"]); string cat = prms["cat"]; string ns = prms["ns"];
     var site = login(project, creds[0], creds[1], creds[3]);
-    string apiout = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&format=xml&list=oldreviewedpages&orend=" + DateTime.Now.AddDays(-days).ToString("yyyy-MM-ddTHH:mm:ss") + "&ormaxsize=" + 
+    string apiout = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&format=xml&list=oldreviewedpages&orstart=" + DateTime.Now.AddDays(-days).ToString("yyyy-MM-ddTHH:mm:ss") + "&ormaxsize=" + 
         diffsize + (ns == "all" ? "" : "&ornamespace=" + ns) + (cat == "" ? "" : "&orcategory=" + e(cat)) + "&orlimit=500").Result;
     using (var r = new XmlTextReader(new StringReader(apiout)))
         while (r.Read())
@@ -465,7 +465,7 @@ app.MapGet("/patlist", (HttpContext context) =>
     string answer = "<table border=\"1\" cellspacing=\"0\"><tr><th>Страница</th><th>Распатрулирована</th><th>Дифф</th>\n";
     foreach (var u in data.OrderByDescending(u => sort == "diffsize" ? u.Value.diffsize : u.Value.pending_since))
         answer += "<tr><td><a href=\"https://" + project + ".org/w/index.php?diff=" + u.Value.curid + "&oldid=" + u.Value.oldid + "\">" + u.Key + "</a></td><td>" + u.Value.pending_since.Substring(0, 10) +
-        "</td><td>" + u.Value.diffsize + "</td></tr>";
+        "</td><td>" + u.Value.diffsize + "</td></tr>\n";
     return Results.Content(patlist_response(project, cat, ns, days, diffsize, sort, answer + "</table>", html_template), meta);
 });
 app.Run();
@@ -620,8 +620,8 @@ string patlist_response(string project, string cat, string ns, int days, int dif
     string result = html_template.Replace("%title%", "Список для патрулирования").Replace("%form%", "patlist").Replace("%body%",
         @"Раздел: <input type=""text"" name=""project"" value=""%project%"" required>
 Категория: <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""без префикса Категория:, можно не указывать"">
-Распатрулированы позже <input type=""number"" name=""days"" value=""%days%""> дней назад
-Размер диффа не более <input type=""number"" name=""diffsize"" value=""%diffsize%""> байт
+Распатрулированы позже <input type=""number"" name=""days"" value=""%days%"" style=""width:2em""> дней назад
+Размер диффа не более <input type=""number"" name=""diffsize"" value=""%diffsize%"" style=""width:4em""> байт
 <br><br>Пространство <select size=""1"" name=""ns""><option value=""all"" %selected_all%>любое</option><option value=""0"" %selected_0%>статьи</option><option value=""10"" %selected_10%>шаблоны</option>
 <option value=""14"" %selected_14%>категории</option><option value=""6"" %selected_6%>файлы</option><option value=""100"" %selected_100%>порталы</option></select> 
 Сортировать по <select size=""1"" name=""sort""><option value=""diffsize"" %selected_diffsize%>размеру диффа</option><option value=""time"" %selected_time%>времени распатрулирования</option></select>").Replace("%result%",
