@@ -8,7 +8,6 @@ var builder = WebApplication.CreateBuilder(args); var app = builder.Build();
 string html_template = @"<!DOCTYPE html><html lang=""ru""><head><meta charset=""UTF-8""><style> a, abbr { text-decoration: none; } </style><title>%title%</title></head><body><center>
 <form action=""%form%"">%body% <button type=""submit"">Start</button></form><br>%result%</center></body></html>", meta = "text/html; charset=utf-8";
 var creds = new StreamReader(Environment.GetEnvironmentVariable("TOOL_DATA_DIR") + "/p").ReadToEnd().Split('\n');
-
 app.MapGet("/resized-pages", (HttpContext context) =>
 {
     string resized_template = html_template.Replace("%title%", "Статистика улучшенных статей за период").Replace("%form%", "resized-pages").Replace("%body%",
@@ -27,7 +26,7 @@ app.MapGet("/resized-pages", (HttpContext context) =>
     string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=К:Статьи проекта " + inwikiproject + "&cmprop=title&cmnamespace=1&cmtype=page&cmlimit=max";
     var site = login("ru.wikipedia", creds[0], creds[1], creds[3]);
     while (cont != null) {
-        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue"); while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "cm") {
                 var title = r.GetAttribute("title"); var p = new page() { title = title.Substring(title.IndexOf(':') + 1) }; pages.Add(p);
@@ -35,13 +34,13 @@ app.MapGet("/resized-pages", (HttpContext context) =>
     }
     foreach (var p in pages) {
         string apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + startyear + "-01-01T00:00:00Z&titles=" +
-            Uri.EscapeDataString(p.title)).Result;
+            e(p.title)).Result;
         var r = new XmlTextReader(new StringReader(apiout)); while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
                 p.oldsize = i(r.GetAttribute("size"));
         if (p.oldsize != 0) {
             apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=revisions&format=xml&rvprop=size&rvlimit=1&rvstart=" + endyear + "-01-01T00:00:00Z&titles=" +
-                Uri.EscapeDataString(p.title)).Result;
+                e(p.title)).Result;
             r = new XmlTextReader(new StringReader(apiout)); while (r.Read())
                 if (r.NodeType == XmlNodeType.Element && r.Name == "rev")
                     p.newsize = i(r.GetAttribute("size"));
@@ -52,12 +51,11 @@ app.MapGet("/resized-pages", (HttpContext context) =>
     string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Статья</th><th>Изменила размер во столько раз</th><th>На столько байт</th></tr>\n";
     foreach (var u in pages.OrderByDescending(u => u.times))
         if (u.oldsize != 0 && u.oldsize != u.newsize)
-            result += "<tr><td><a href=\"https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(u.title) + "\">" + u.title + "</a></td><td>" + u.times + "</td><td>" + (u.newsize - u.oldsize) +
+            result += "<tr><td><a href=\"https://ru.wikipedia.org/wiki/" + e(u.title) + "\">" + u.title + "</a></td><td>" + u.times + "</td><td>" + (u.newsize - u.oldsize) +
                 "</td></tr>\n";
     return Results.Content(resized_template.Replace("%result%", result + "</table>").Replace("%inwikiproject%", inwikiproject)
             .Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()), meta);
 });
-
 app.MapGet("/transclusions-count", (HttpContext context) =>
 {
     string transclusions_template = html_template.Replace("%title%", "Transclusions count in %cat%").Replace("%form%", "transclusions-count").Replace("%body%",
@@ -73,7 +71,7 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
     if (cat == "")
         return Results.Content(transclusions_template.Replace("%result%", "Enter the category name").Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
     var site = login("ru.wikipedia", creds[0], creds[1], creds[3]);
-    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + Uri.EscapeDataString(cat)).Result)))
+    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + e(cat)).Result)))
         while (r.Read())
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
                 return Results.Content(transclusions_template.Replace("%result%", "There is no Category:" + cat + " in " + wiki).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
@@ -82,10 +80,10 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
         return Results.Content(transclusions_template.Replace("%result%", "There are no pages in this category").Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
     else {
         foreach (var page in pages.Keys) {
-            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + Uri.EscapeDataString(page) + "&eilimit=max";
+            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + e(page) + "&eilimit=max";
             int counter = 0;
             while (cont != null) {
-                var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + Uri.EscapeDataString(cont)).Result));
+                var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result));
                 r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
                 while (r.Read())
                     if (r.Name == "ei")
@@ -95,11 +93,10 @@ with subcats to depth <input type=""number"" name=""depth"" value=""%depth%"" st
         }
         string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Page</th><th>Transclusions</th></tr>\n";
         foreach (var p in pages.OrderByDescending(p => p.Value))
-            result += "<tr><td><a target=\"_blank\" href=\"https://" + wiki + ".org/wiki/" + Uri.EscapeDataString(p.Key).Replace("%3A", ":").Replace("%20", "_") + "\">" + p.Key + "</a></td><td>" + p.Value + "</td></tr>\n";
+            result += "<tr><td><a target=\"_blank\" href=\"https://" + wiki + ".org/wiki/" + e(p.Key).Replace("%3A", ":").Replace("%20", "_") + "\">" + p.Key + "</a></td><td>" + p.Value + "</td></tr>\n";
         return Results.Content(transclusions_template.Replace("%result%", result + "</table>").Replace(" % wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", requireddepth.ToString()), meta);
     }
 });
-
 app.MapGet("/likes", (HttpContext context) =>
 {
     string likes_template = html_template.Replace("%title%", "Likes from and to user %user%").Replace("%form%", "likes").Replace("%body%",
@@ -130,15 +127,14 @@ app.MapGet("/likes", (HttpContext context) =>
     } connect.Close();
     string response = "<br><br>\n<table><tr><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
     foreach (var t in thanked.OrderByDescending(t => t.Value))
-        response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> " +
-        "<a href=\"https://mbh.toolforge.org/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
+        response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + e(user) + "&page=" + e(t.Key) + "\">🡲</a> " +
+        "<a href=\"https://mbh.toolforge.org/likes?user=" + e(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
     response += "</table></td><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
     foreach (var t in thankers.OrderByDescending(t => t.Value))
-        response += "<tr><td><a href=\"https://mbh.toolforge.org/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki +
-        ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">🡲</a>" + user + " </td><td>" + t.Value + "</td></tr>\n";
+        response += "<tr><td><a href=\"https://mbh.toolforge.org/likes?user=" + e(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki +
+        ".org/w/index.php?title=special:log&type=thanks&user=" + e(t.Key) + "&page=" + e(user) + "\">🡲</a>" + user + " </td><td>" + t.Value + "</td></tr>\n";
     return Results.Content(likes_template.Replace("%result%", response + "</table></td></tr></table>").Replace("%user%", user).Replace("%wiki%", wiki), meta);
 });
-
 app.MapGet("/patstats", (HttpContext context) =>
 {
     Dictionary<string, stat> usertable = new Dictionary<string, stat>();
@@ -180,19 +176,18 @@ app.MapGet("/patstats", (HttpContext context) =>
     "<th>Modules</th><th>Unreviews</th></tr>\n";
     foreach (var u in usertable.OrderByDescending(u => sort == "main" ? u.Value.main : (sort == "template" ? u.Value.template : (sort == "cat" ? u.Value.cat : (sort == "file" ? u.Value.file :
     (sort == "portal" ? u.Value.portal : (sort == "module" ? u.Value.module : (sort == "unpat" ? u.Value.unpat : u.Value.sum))))))))
-        answer += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/special:log?type=review&user=" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" +
+        answer += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/special:log?type=review&user=" + e(u.Key) + "\">" + u.Key + "</a></td><td>" +
             u.Value.sum + "</td><td>" + u.Value.main + "</td><td>" + u.Value.template + "</td><td>" + u.Value.cat + "</td><td>" + u.Value.file + "</td><td>" + u.Value.portal + "</td><td>" +
             u.Value.module + "</td><td>" + u.Value.unpat + "</td></tr>";
     return Results.Content(patstats_response(type, project, startdate, enddate, sort, answer + "</table>", html_template), meta);
 });
-
 app.MapGet("/unreviewed-pages", (HttpContext context) =>
 {
     HashSet<string> candidates = new HashSet<string>(); Dictionary<string, pageinfo_oldreviewed> pages = new Dictionary<string, pageinfo_oldreviewed>();
     var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); bool talks; string wiki, cat, template; int requireddepth;
     if (prms.Count == 0)
         return Results.Content(unreviewed_response("ru.wikipedia", "", "", 0, "", false, html_template), meta);
-    try { talks = prms["talks"] == "on"; wiki = prms["wiki"]; cat = prms["cat"].Trim() ?? ""; template = prms["template"].Trim() ?? ""; requireddepth = i(prms["depth"]); }
+    try { talks = prms["talks"] == "on"; wiki = prms["wiki"]; cat = prms["cat"].Trim(); template = prms["template"].Trim(); requireddepth = i(prms["depth"]); }
     catch { return Results.Content(unreviewed_response("ru.wikipedia", "", "", 0, "", false, html_template), meta); }
     if (requireddepth < 0)
         return Results.Content(unreviewed_response(wiki, cat, template, 0, "Use non-negative depth value", talks, html_template), meta);
@@ -201,13 +196,13 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
     var site = login(wiki, creds[0], creds[1], creds[3]);
     bool broken_title = false;
     if (cat != "") {
-        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + Uri.EscapeDataString(cat)).Result));
+        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + e(cat)).Result));
         while (r.Read())
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
                 broken_title = true;
     }
     if (template != "") {
-        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=" + Uri.EscapeDataString(template)).Result));
+        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=" + e(template)).Result));
         while (r.Read())
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
                 broken_title = true;
@@ -218,9 +213,9 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
     if (cat != "")
         searchsubcats_unreviewed(cat, 0, requireddepth, site, wiki, candidates, talks);
     if (template != "") {
-        string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + Uri.EscapeDataString(template) + "&eilimit=max&einamespace=100|102|0|6|10|14";
+        string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + e(template) + "&eilimit=max&einamespace=100|102|0|6|10|14";
         while (cont != null) {
-            var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + Uri.EscapeDataString(cont)).Result));
+            var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result));
             r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue"); while (r.Read())
                 if (r.Name == "ei" && !candidates.Contains(r.GetAttribute("pageid")))
                     candidates.Add(r.GetAttribute("pageid"));            
@@ -258,14 +253,13 @@ app.MapGet("/unreviewed-pages", (HttpContext context) =>
     foreach (var p in pages.OrderByDescending(p => p.Value.pending_since)) {
         string link;
         if (p.Value.pending_since == "never")
-            link = "https://" + wiki + ".org/wiki/" + Uri.EscapeDataString(p.Key);
+            link = "https://" + wiki + ".org/wiki/" + e(p.Key);
         else
-            link = "https://" + wiki + ".org/w/index.php?title=" + Uri.EscapeDataString(p.Key) + "&type=revision&diff=cur&oldid=" + p.Value.stable_revid;
+            link = "https://" + wiki + ".org/w/index.php?title=" + e(p.Key) + "&type=revision&diff=cur&oldid=" + p.Value.stable_revid;
         result += "<tr><td><a target=\"_blank\" href=\"" + link + "\">" + p.Key + "</a></td><td>" + p.Value.pending_since + "</td></tr>\n";
     }
     return Results.Content(unreviewed_response(wiki, cat, template, requireddepth, result += "</table></center>", talks, html_template), meta);
 });
-
 app.MapGet("/test", (HttpContext context) =>
 {
     string result = "<body><canter><table border=1><tr><th>envvar</th><th>value</th><tr>";
@@ -273,7 +267,6 @@ app.MapGet("/test", (HttpContext context) =>
         result += "<tr><td>" + v.Key + "</td><td>" + (v.Key.ToString().Contains("PASS") ? "" : v.Value) + "</td></tr>";
     return Results.Content(result + "</table></center></body>", meta);
 });
-
 app.MapGet("/cpf", (HttpContext context) =>
 {
     var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString()); var path = new catpath(); var processedcats = new HashSet<string>();
@@ -282,7 +275,7 @@ app.MapGet("/cpf", (HttpContext context) =>
         return Results.Content(cpf_template.Replace("%page%", "").Replace("%uppercat%", "").Replace("%project%", "ru.wikipedia").Replace("%response%", ""), meta);
     string project = prms["project"]; string cat = prms["uppercat"]; string page = prms["page"]; var site = login("ru.wikipedia", creds[0], creds[1], creds[3]);
     string apiout; try {
-        apiout = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + Uri.EscapeDataString(cat)).Result;
+        apiout = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + e(cat)).Result;
     }
     catch { return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", "ru.wikipedia").Replace("%response%", "<li>There is no such wiki (" + project + ")</li>"), meta); }
     using (var r = new XmlTextReader(new StringReader(apiout)))
@@ -290,7 +283,7 @@ app.MapGet("/cpf", (HttpContext context) =>
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1") {
                 return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>There is no such category (Category:" + cat + ") on this wiki</li>"), meta);
             }
-    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=" + Uri.EscapeDataString(page)).Result)))
+    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=" + e(page)).Result)))
         while (r.Read())
             if (r.Name == "page" && r.GetAttribute("_idx") == "-1") {
                 return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>There is no such page (" + page + ") on this wiki</li>"), meta);
@@ -310,7 +303,6 @@ app.MapGet("/cpf", (HttpContext context) =>
     }
     return Results.Content(cpf_template.Replace("%page%", page).Replace("%uppercat%", cat).Replace("%project%", project).Replace("%response%", "<li>Path not found</li>"), meta);
 });
-
 app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
 {
     var pages = new Dictionary<string, pageinfo_iwiki>(); var FAs = new List<string>(); var GAs = new List<string>(); var RAs = new List<string>(); var FLs = new List<string>();
@@ -331,9 +323,9 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
 
     if (template != "") {
         string nstag = (onlyarticles ? "&einamespace=0" : "");
-        string cont = "", query = "https://" + sourcewiki + ".org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + Uri.EscapeDataString(template) + nstag + "&eilimit=max";
+        string cont = "", query = "https://" + sourcewiki + ".org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + e(template) + nstag + "&eilimit=max";
         while (cont != null) {
-            var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + Uri.EscapeDataString(cont)).Result));
+            var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result));
             r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
             while (r.Read())
                 if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
@@ -373,11 +365,11 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
         if (show_existing_pages) {
             foreach (var p in order_by_status ? targetpages.OrderByDescending(p => p.Value.status) : targetpages.OrderByDescending(p => p.Value.numofiwiki))
                 if (p.Value.numofiwiki >= miniwiki)
-                    result += "<tr><td><a href=\"https://" + targetwiki + ".org/wiki/" + Uri.EscapeDataString(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value.numofiwiki + "</td><td>" + p.Value.status + "</td></tr>\n";
+                    result += "<tr><td><a href=\"https://" + targetwiki + ".org/wiki/" + e(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value.numofiwiki + "</td><td>" + p.Value.status + "</td></tr>\n";
         } else {
             foreach (var p in order_by_status ? pages.OrderByDescending(p => p.Value.status) : pages.OrderByDescending(p => p.Value.numofiwiki))
                 if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
-                    result += "<tr><td><a href=\"https://" + sourcewiki + ".org/wiki/" + Uri.EscapeDataString(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value.numofiwiki + "</td><td>" + p.Value.status + "</td></tr>\n";
+                    result += "<tr><td><a href=\"https://" + sourcewiki + ".org/wiki/" + e(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value.numofiwiki + "</td><td>" + p.Value.status + "</td></tr>\n";
         }
         result += "</table></center>";
         if (wikilist && !show_existing_pages)
@@ -394,7 +386,6 @@ app.MapGet("/pages-wo-iwiki", (HttpContext context) =>
         return Results.Content(iwiki_response(sourcewiki, category, template, targetwiki, show_existing_pages, onlyarticles, order_by_status, wikilist, wikitable, requireddepth, miniwiki, result), meta);
     }
 });
-
 app.MapGet("/page-authors", (HttpContext context) =>
 {
     int c = 0; var stats = new page_authors_stats() { list = new Dictionary<string, int>() }; var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
@@ -446,16 +437,36 @@ app.MapGet("/page-authors", (HttpContext context) =>
             get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id, site, stats);
     else
         foreach (var name in pages.Keys)
-            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name), site, stats);
+            get_first_author("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + e(name), site, stats);
 
     string result = "Total pages: " + pages.Count + "." + (stats.hidden > 0 ? " Author is hidden on " + stats.hidden + " page(s)." : "") +
     (stats.error > 0 ? " Can't get author on " + stats.error + " page(s)." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>User</th><th>Created pages</th></tr>\n";
     foreach (var u in stats.list.OrderByDescending(u => u.Value)) {
         if (u.Value < min_num_of_pages)
             break;
-        result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
+        result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/User:" + e(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
     }
     return Results.Content(authors_response(type, project, rawsource, min_num_of_pages, result, depth), meta);    
+});
+app.MapGet("/patlist", (HttpContext context) =>
+{
+    Dictionary<string, patlist_data> data = new Dictionary<string, patlist_data>();
+    var prms = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
+    if (prms.Count == 0)
+        return Results.Content(patlist_response("ru.wikipedia", "", "all", 1, 50, "all", "", html_template), meta);
+    string project = prms["project"]; string sort = prms["sort"]; int days = int.Parse(prms["days"]); int diffsize = int.Parse(prms["diffsize"]); string cat = prms["cat"]; string ns = prms["ns"];
+    var site = login(project, creds[0], creds[1], creds[3]);
+    string apiout = site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&format=xml&list=oldreviewedpages&orend=" + DateTime.Now.AddDays(-days).ToString("yyyy-MM-ddTHH:mm:ss") + "&ormaxsize=" + 
+        diffsize + (ns == "all" ? "" : "&ornamespace=" + ns) + (cat == "" ? "" : "&orcategory=" + e(cat)) + "&orlimit=500").Result;
+    using (var r = new XmlTextReader(new StringReader(apiout)))
+        while (r.Read())
+            if (r.Name == "p")
+                data.Add(r.GetAttribute("title"), new patlist_data() { diffsize = r.GetAttribute("diff_size"), pending_since = r.GetAttribute("pending_since"), curid = r.GetAttribute("revid"), oldid = r.GetAttribute("stable_revid") });
+    string answer = "<table border=\"1\" cellspacing=\"0\"><tr><th>Страница</th><th>Распатрулирована</th><th>Дифф</th>\n";
+    foreach (var u in data.OrderByDescending(u => sort == "diffsize" ? u.Value.diffsize : u.Value.pending_since))
+        answer += "<tr><td><a href=\"https://" + project + ".org/w/index.php?diff=" + u.Value.curid + "&oldid=" + u.Value.oldid + "\">" + u.Key + "</a></td><td>" + u.Value.pending_since.Substring(0, 10) +
+        "</td><td>" + u.Value.diffsize + "</td></tr>";
+    return Results.Content(patlist_response(project, cat, ns, days, diffsize, sort, answer + "</table>", html_template), meta);
 });
 app.Run();
 HttpClient login(string project, string login, string password, string ua) {
@@ -464,11 +475,11 @@ HttpClient login(string project, string login, string password, string ua) {
         .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + project + ".org/w/api.php", new
             FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
 }
-string url2db(string url) { return url.Replace(".", "").Replace("wikipedia", "wiki"); } int i(Object input) { return Convert.ToInt32(input); }
+string url2db(string url) { return url.Replace(".", "").Replace("wikipedia", "wiki"); } int i(Object input) { return Convert.ToInt32(input); } string e(string s) { return Uri.EscapeDataString(s); }
 void searchsubcats(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, Dictionary<string, int> pages) {
-    string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=title&cmlimit=max";
+    string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + e(category) + "&cmprop=title&cmlimit=max";
     while (cont != null) {
-        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
         while (r.Read())
             if (r.Name == "cm")
@@ -476,9 +487,9 @@ void searchsubcats(string category, int currentdepth, int requireddepth, HttpCli
                     pages.Add(r.GetAttribute("title"), 0);
     }
     cont = "";
-    query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
+    query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + e(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
     while (cont != null) {
-        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
         while (r.Read())
             if (r.Name == "cm") {
@@ -490,9 +501,9 @@ void searchsubcats(string category, int currentdepth, int requireddepth, HttpCli
 }
 void searchsubcats_unreviewed(string category, int currentdepth, int requireddepth, HttpClient site, string wiki, HashSet<string> candidates, bool talks)
 {
-    string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=" + (talks ? "title" : "ids") + "&cmlimit=max" + (talks ? "" : "&cmnamespace=100|102|0|6|10|14");
+    string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + e(category) + "&cmprop=" + (talks ? "title" : "ids") + "&cmlimit=max" + (talks ? "" : "&cmnamespace=100|102|0|6|10|14");
     while (cont != null) {
-        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
         while (r.Read())
             if (r.Name == "cm") {
@@ -503,9 +514,9 @@ void searchsubcats_unreviewed(string category, int currentdepth, int requireddep
             }
     }
     cont = ""; //собираем категории
-    query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
+    query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + e(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
     while (cont != null) {
-        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
         while (r.Read())
             if (r.Name == "cm") {
@@ -517,16 +528,16 @@ void searchsubcats_unreviewed(string category, int currentdepth, int requireddep
 }
 void searchsubcats_iwiki(string category, int currentdepth, string sourcewiki, HttpClient site, bool onlyarticles, Dictionary<string, pageinfo_iwiki> pages, int requireddepth) {
     string nstag = onlyarticles ? "&cmnamespace=0" : ""; //собираем страницы
-    string cont = "", query = "https://" + sourcewiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + nstag + "&cmprop=title&cmlimit=max";
+    string cont = "", query = "https://" + sourcewiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + e(category) + nstag + "&cmprop=title&cmlimit=max";
     while (cont != null) {
-        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue"); while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "cm")
                 if (!pages.ContainsKey(r.GetAttribute("title"))) { pages.Add(r.GetAttribute("title"), new pageinfo_iwiki()); }
     }
-    cont = ""; query = "https://" + sourcewiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
+    cont = ""; query = "https://" + sourcewiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + e(category) + "&cmnamespace=14&cmprop=title&cmlimit=max";
     while (cont != null) {
-        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result));
+        var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result));
         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
         while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "cm") {
@@ -604,6 +615,35 @@ enddate).Replace(type == "db" ? "%checked_db%" : "%checked_api%", "checked");
         result = result.Replace("%checked_unpat%", "checked");
     return result;
 }
+string patlist_response(string project, string cat, string ns, int days, int diffsize, string sort, string answer, string html_template)
+{
+    string result = html_template.Replace("%title%", "Список для патрулирования").Replace("%form%", "patlist").Replace("%body%",
+        @"Раздел: <input type=""text"" name=""project"" value=""%project%"" required>
+Категория: <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""без префикса Категория:, можно не указывать"">
+Распатрулированы позже <input type=""number"" name=""days"" value=""%days%""> дней назад
+Размер диффа не более <input type=""number"" name=""diffsize"" value=""%diffsize%""> байт
+<br><br>Пространство <select size=""1"" name=""ns""><option value=""all"" %selected_all%>любое</option><option value=""0"" %selected_0%>статьи</option><option value=""10"" %selected_10%>шаблоны</option>
+<option value=""14"" %selected_14%>категории</option><option value=""6"" %selected_6%>файлы</option><option value=""100"" %selected_100%>порталы</option></select> 
+Сортировать по <select size=""1"" name=""sort""><option value=""diffsize"" %selected_diffsize%>размеру диффа</option><option value=""time"" %selected_time%>времени распатрулирования</option></select>").Replace("%result%",
+answer).Replace("%project%", project).Replace("%days%", days.ToString()).Replace("%cat%", cat).Replace("%ns%", ns).Replace("%diffsize%", diffsize.ToString());
+    if (sort == "diffsize")
+        result = result.Replace("%selected_diffsize%", "selected");
+    else
+        result = result.Replace("%selected_time%", "selected");
+    if (ns == "all")
+        result = result.Replace("%selected_all%", "selected");
+    else if (ns == "0")
+        result = result.Replace("%selected_0%", "selected");
+    else if (ns == "10")
+        result = result.Replace("%selected_10%", "selected");
+    else if (ns == "6")
+        result = result.Replace("%selected_6%", "selected");
+    else if (ns == "14")
+        result = result.Replace("%selected_14%", "selected");
+    else if (ns == "100")
+        result = result.Replace("%selected_100%", "selected");
+    return result;
+}
 string unreviewed_response(string wiki, string cat, string template, int depth, string answer, bool talks, string html_template)
 {
     string title = "";
@@ -678,7 +718,7 @@ List of categories/templates/page lists:<textarea name=""source"" placeholder=""
 catpath search_upcats(string project, string purpose_cat, string currentcat, catpath path, HashSet<string> processedcats, HttpClient site) {
     processedcats.Add(currentcat);
     var upcats = new List<string>();
-    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=" + Uri.EscapeDataString(currentcat)).Result)))
+    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + project + ".org/w/api.php?action=query&prop=categories&format=xml&cllimit=max&titles=" + e(currentcat)).Result)))
         while (r.Read())
             if (r.Name == "cl")
                 upcats.Add(r.GetAttribute("title"));
@@ -696,9 +736,9 @@ void gather_quality_pages(List<string> list_of_quality_pages, string wd_item, Ht
             if (r.Name == "sitelink" && r.GetAttribute("site") == url2db(requestedwiki))
                 quality_template_name = r.GetAttribute("title");
     if (quality_template_name != "") {
-        string cont = "", query = "https://" + requestedwiki + ".org/w/api.php?action=query&format=json&formatversion=2&list=embeddedin&eititle=" + Uri.EscapeDataString(quality_template_name) + "&eilimit=max";
+        string cont = "", query = "https://" + requestedwiki + ".org/w/api.php?action=query&format=json&formatversion=2&list=embeddedin&eititle=" + e(quality_template_name) + "&eilimit=max";
         while (cont != "-") {
-            Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + Uri.EscapeDataString(cont)).Result);
+            Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result);
             if (response.@continue != null)
                 cont = response.@continue.eicontinue;
             else
@@ -741,6 +781,7 @@ void get_first_author(string request, HttpClient site, page_authors_stats stats)
 class page { public required string title; public int oldsize, newsize; public float times; }
 class stat { public int main, template, cat, file, portal, unpat, module, sum; }
 class pageinfo_oldreviewed { public string pending_since, stable_revid; }
+class patlist_data { public string pending_since, diffsize, oldid, curid; }
 class catpath { public List<string> path = new List<string>(); public bool found; }
 class pageinfo_iwiki { public string status; public int numofiwiki, id; }
 class page_authors_stats { public Dictionary<string, int> list; public int hidden, error; }
