@@ -461,9 +461,9 @@ app.MapGet("/patlist", (HttpContext context) =>
     using (var r = new XmlTextReader(new StringReader(apiout)))
         while (r.Read())
             if (r.Name == "p")
-                data.Add(r.GetAttribute("title"), new patlist_data() { diffsize = r.GetAttribute("diff_size"), pending_since = r.GetAttribute("pending_since"), curid = r.GetAttribute("revid"), oldid = r.GetAttribute("stable_revid") });
+                data.Add(r.GetAttribute("title"), new patlist_data() { diffsize = i(r.GetAttribute("diff_size")), pending_since = r.GetAttribute("pending_since"), curid = r.GetAttribute("revid"), oldid = r.GetAttribute("stable_revid") });
     string answer = "<table border=\"1\" cellspacing=\"0\"><tr><th>Страница</th><th>Распатрулирована</th><th>Дифф</th>\n";
-    foreach (var u in data.OrderByDescending(u => sort == "diffsize" ? u.Value.diffsize : u.Value.pending_since))
+    foreach (var u in data.OrderByDescending(u => sort == "diffsize" ? (object)u.Value.diffsize : (object)u.Value.pending_since))
         answer += "<tr><td><a href=\"https://" + project + ".org/w/index.php?diff=" + u.Value.curid + "&oldid=" + u.Value.oldid + "\">" + u.Key + "</a></td><td>" + u.Value.pending_since.Substring(0, 10) +
         "</td><td>" + u.Value.diffsize + "</td></tr>\n";
     return Results.Content(patlist_response(project, cat, ns, days, diffsize, sort, answer + "</table>", html_template), meta);
@@ -620,9 +620,9 @@ string patlist_response(string project, string cat, string ns, int days, int dif
     string result = html_template.Replace("%title%", "Список для патрулирования").Replace("%form%", "patlist").Replace("%body%",
         @"Раздел: <input type=""text"" name=""project"" value=""%project%"" required>
 Категория: <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""без префикса Категория:, можно не указывать"">
-Распатрулированы позже <input type=""number"" name=""days"" value=""%days%"" style=""width:2em""> дней назад
-Размер диффа не более <input type=""number"" name=""diffsize"" value=""%diffsize%"" style=""width:4em""> байт
-<br><br>Пространство <select size=""1"" name=""ns""><option value=""all"" %selected_all%>любое</option><option value=""0"" %selected_0%>статьи</option><option value=""10"" %selected_10%>шаблоны</option>
+Распатрулированы позже <input type=""number"" name=""days"" value=""%days%"" style=""width:5em""> дней назад
+<br><br>Размер диффа не более <input type=""number"" name=""diffsize"" value=""%diffsize%"" style=""width:5em""> байт
+Пространство <select size=""1"" name=""ns""><option value=""all"" %selected_all%>любое</option><option value=""0"" %selected_0%>статьи</option><option value=""10"" %selected_10%>шаблоны</option>
 <option value=""14"" %selected_14%>категории</option><option value=""6"" %selected_6%>файлы</option><option value=""100"" %selected_100%>порталы</option></select> 
 Сортировать по <select size=""1"" name=""sort""><option value=""diffsize"" %selected_diffsize%>размеру диффа</option><option value=""time"" %selected_time%>времени распатрулирования</option></select>").Replace("%result%",
 answer).Replace("%project%", project).Replace("%days%", days.ToString()).Replace("%cat%", cat).Replace("%ns%", ns).Replace("%diffsize%", diffsize.ToString());
@@ -781,7 +781,7 @@ void get_first_author(string request, HttpClient site, page_authors_stats stats)
 class page { public required string title; public int oldsize, newsize; public float times; }
 class stat { public int main, template, cat, file, portal, unpat, module, sum; }
 class pageinfo_oldreviewed { public string pending_since, stable_revid; }
-class patlist_data { public string pending_since, diffsize, oldid, curid; }
+class patlist_data { public string pending_since, oldid, curid; public int diffsize; }
 class catpath { public List<string> path = new List<string>(); public bool found; }
 class pageinfo_iwiki { public string status; public int numofiwiki, id; }
 class page_authors_stats { public Dictionary<string, int> list; public int hidden, error; }
