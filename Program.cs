@@ -145,16 +145,13 @@ app.MapGet("/patstats", (HttpContext context) =>
     if (date1 <= date2) { startdate = prms["startdate"]; enddate = prms["enddate"]; } else { startdate = prms["enddate"]; enddate = prms["startdate"]; } //чтобы работало корректно, если первая дата позже второй
     if (type == "db") {
         var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(project))); connect.Open();
-        var squery = new MySqlCommand("select log_action, log_namespace, cast(actor_name as char) user from logging join actor on log_actor=actor_id where log_type=\"review\" and " +
+        var squery = new MySqlCommand("select cast(log_action as char) action, log_namespace, cast(actor_name as char) user from logging join actor on log_actor=actor_id where log_type='review' and " +
             "log_timestamp >" + startdate.Replace("-", "") + "000000 and log_timestamp<" + enddate.Replace("-", "") + "235959", connect); var r = squery.ExecuteReader();
         while (r.Read()) {
             string user = r.GetString("user");
             if (user == null)
                 continue;
-            var buffer = new byte[10];
-            r.GetBytes(0, 0, buffer, 0, 10);
-            int ns = r.GetInt16("log_namespace");
-            put_new_action(user, Encoding.UTF8.GetString(buffer, 0, buffer.Length), ns, usertable);
+            put_new_action(user, r.GetString("action"), r.GetInt16("log_namespace"), usertable);
         } connect.Close();
     }
     if (type == "api") {
@@ -620,8 +617,8 @@ string patlist_response(string project, string cat, string ns, int days, int dif
     string result = html_template.Replace("%title%", "Список для патрулирования").Replace("%form%", "patlist").Replace("%body%",
         @"Раздел: <input type=""text"" name=""project"" value=""%project%"" required>
 Категория: <input type=""text"" name=""cat"" value=""%cat%"" placeholder=""без префикса Категория:, можно не указывать"">
-Распатрулированы позже <input type=""number"" name=""days"" value=""%days%"" style=""width:5em""> дней назад
-<br><br>Размер диффа не более <input type=""number"" name=""diffsize"" value=""%diffsize%"" style=""width:5em""> байт
+Распатрулированы позже <input type=""number"" name=""days"" value=""%days%"" style=""width:2em""> дней назад
+<br><br>Размер диффа не более <input type=""number"" name=""diffsize"" value=""%diffsize%"" style=""width:3em""> байт
 Пространство <select size=""1"" name=""ns""><option value=""all"" %selected_all%>любое</option><option value=""0"" %selected_0%>статьи</option><option value=""10"" %selected_10%>шаблоны</option>
 <option value=""14"" %selected_14%>категории</option><option value=""6"" %selected_6%>файлы</option><option value=""100"" %selected_100%>порталы</option></select> 
 Сортировать по <select size=""1"" name=""sort""><option value=""diffsize"" %selected_diffsize%>размеру диффа</option><option value=""time"" %selected_time%>времени распатрулирования</option></select>").Replace("%result%",
